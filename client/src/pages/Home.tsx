@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronDown, TrendingUp, BarChart3, PieChart } from 'lucide-react';
+import { Link } from 'wouter';
+import { ChevronDown, TrendingUp, BarChart3, PieChart, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -35,13 +36,24 @@ export default function Home() {
       {/* Header */}
       <header className="gradient-header text-white py-12 px-4 sm:px-6 lg:px-8">
         <div className="container">
-          <div className="flex items-center gap-3 mb-4">
-            <TrendingUp className="w-8 h-8" />
-            <h1 className="text-4xl font-bold">股票分析指标全景图</h1>
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <TrendingUp className="w-8 h-8" />
+                <h1 className="text-4xl font-bold">股票分析指标全景图</h1>
+              </div>
+              <p className="text-lg text-blue-100 max-w-2xl">
+                一份完整的股票投资分析指南，涵盖宏观经济、行业板块和个股分析的所有关键指标
+              </p>
+            </div>
+            {/* 右上角知识库入口 */}
+            <Link href="/knowledge">
+              <button className="flex items-center gap-2 bg-white/15 hover:bg-white/25 border border-white/30 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium mt-1">
+                <BookOpen className="w-4 h-4" />
+                项目知识库
+              </button>
+            </Link>
           </div>
-          <p className="text-lg text-blue-100 max-w-2xl">
-            一份完整的股票投资分析指南，涵盖宏观经济、行业板块和个股分析的所有关键指标
-          </p>
         </div>
       </header>
 
