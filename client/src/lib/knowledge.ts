@@ -1,5 +1,5 @@
 // 每次修改 INITIAL_DOCS 时，递增此版本号，触发自动更新
-const DOCS_VERSION = 4;
+const DOCS_VERSION = 5;
 const VERSION_KEY = 'stock_knowledge_version';
 
 export interface KnowledgeDoc {
@@ -35,7 +35,7 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
 
 本需求文档基于已确定的 **数据库 Schema v2** 和 **指标体系**，明确宏观、板块、个股、新闻四大类数据的采集范围、来源、频率和字段映射关系。
 
-**核心决策**：宏观指标数据采集全部使用 **AKShare 开源 Python 库**，封装了东方财富、新浪财经、国家统计局、中国债券信息网等公开网站数据，**完全免费、无需注册、无需 API Key**。个股和板块数据仍沿用 Tushare Pro（已有 Token）。
+**核心决策**：宏观指标数据采集全部使用 **AKShare 开源 Python 库**，封装了东方财富、新浪财经、金十数据、funddb 等公开网站数据，**完全免费、无需注册、无需 API Key**。个股和板块数据仍沿用 Tushare Pro（已有 Token）。
 
 ---
 
@@ -47,44 +47,60 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
 
 ### 1.1 宏观经济（Economy）
 
-| 指标中文名 | indicator_id | AKShare 接口 | 关键字段 | 数据来源 | 采集频率 |
+| 指标中文名 | indicator_id | AKShare 接口 | 关键输出字段 | 数据来源 | 采集频率 |
 |:---|:---|:---|:---|:---|:---|
-| GDP 增速 | gdp_yoy | \`macro_china_gdp\` | \`国内生产总值-同比增长\` | 东方财富 | 季度 |
+| GDP 增速（同比） | gdp_yoy | \`macro_china_gdp\` | \`国内生产总值-同比增长\` | 东方财富 | 季度 |
 | CPI 同比 | cpi_yoy | \`macro_china_cpi\` | \`全国-同比增长\` | 东方财富 | 月度 |
 | PPI 同比 | ppi_yoy | \`macro_china_ppi\` | \`当月同比增长\` | 东方财富 | 月度 |
 | PMI（制造业） | pmi_mfg | \`macro_china_pmi\` | \`制造业-指数\` | 东方财富 | 月度 |
 | PMI（非制造业） | pmi_non_mfg | \`macro_china_pmi\` | \`非制造业-指数\` | 东方财富 | 月度 |
 
+> 时间字段：GDP 为 \`季度\`（格式如 2021-03-01），CPI/PPI/PMI 为 \`月份\`（格式如 2022年10月份）。
+
 ### 1.2 流动性与货币政策（Liquidity）
 
-| 指标中文名 | indicator_id | AKShare 接口 | 关键字段 | 数据来源 | 采集频率 |
+| 指标中文名 | indicator_id | AKShare 接口 | 关键输出字段 | 数据来源 | 采集频率 |
 |:---|:---|:---|:---|:---|:---|
 | M2 货币供应量同比 | m2_yoy | \`macro_china_money_supply\` | \`货币和准货币(M2)-同比增长\` | 东方财富 | 月度 |
-| 社融增量（当月） | sfa_amount | \`macro_china_new_financial_credit\` | 当月新增信贷 | 东方财富 | 月度 |
+| 新增信贷（当月） | new_credit | \`macro_china_new_financial_credit\` | \`当月\` | 东方财富 | 月度 |
 | 1年期 LPR | lpr_1y | \`macro_china_lpr\` | \`LPR1Y\` | 东方财富 | 每次调整 |
+| 5年期 LPR | lpr_5y | \`macro_china_lpr\` | \`LPR5Y\` | 东方财富 | 每次调整 |
 | 存款准备金率（大型机构） | rrr_large | \`macro_china_reserve_requirement_ratio\` | \`大型金融机构-调整后\` | 东方财富 | 每次调整 |
 | 1周 Shibor | shibor_1w | \`macro_china_shibor_all\` | \`1W-定价\` | 金十数据 | 每日 |
 
-### 1.3 政策与预期（Policy）
+> 时间字段：M2/新增信贷 为 \`月份\`；LPR 为 \`TRADE_DATE\`；存准率 为 \`公布时间\`；Shibor 为 \`日期\`。
 
-| 指标中文名 | indicator_id | AKShare 接口 | 关键字段 | 数据来源 | 采集频率 |
+### 1.3 利率与市场利差（Rate & Spread）
+
+| 指标中文名 | indicator_id | AKShare 接口 | 关键输出字段 | 数据来源 | 采集频率 |
 |:---|:---|:---|:---|:---|:---|
-| 10年期中国国债收益率 | bond_10y | \`bond_zh_us_rate\` | \`中国国债收益率10年\` | 东方财富 | 每日 |
-| 10年期美国国债收益率 | us_bond_10y | \`bond_zh_us_rate\` | \`美国国债收益率10年\` | 东方财富 | 每日 |
-| 北向资金净流入 | north_money | \`stock_hsgt_hist_em\` | 北向资金净买入 | 东方财富 | 每日 |
+| 10年期中国国债收益率 | bond_cn_10y | \`bond_zh_us_rate\` | \`中国国债收益率10年\` | 东方财富 | 每日 |
+| 10年期美国国债收益率 | bond_us_10y | \`bond_zh_us_rate\` | \`美国国债收益率10年\` | 东方财富 | 每日 |
 
-> 人民币汇率（USD/CNY）：\`macro_china_rmb\` 接口数据仅到 2021-05，暂不采集，待后续评估替代方案（中国银行汇率 \`currency_boc_sina\`）。
+> 接口 \`bond_zh_us_rate\` 一次返回中美两国国债收益率（2年、5年、10年、30年期），时间字段为 \`日期\`。建议从 2010-01-01 开始采集（早期数据有大量 NaN）。
 
-> 财政政策和产业政策为定性指标，通过 \`news\` 表采集相关新闻和公告进行分析，不直接采集数值。
+> 股债收益率差（= 沪深300 盈利率 - 10年期国债收益率）为派生指标，由前端计算，不单独采集。
 
-### 1.4 市场估值与情绪（Valuation）
+### 1.4 市场资金流向（Capital Flow）
 
-| 指标中文名 | indicator_id | AKShare 接口 | 关键字段 | 数据来源 | 采集频率 |
-|:---|:---|:---|:---|:---|:---|
-| 沪深300 PE(TTM) | hs300_pe_ttm | \`index_value_hist_funddb\` | PE 值 | funddb（韭圈儿） | 每日 |
-| 沪深300 PB | hs300_pb | \`index_value_hist_funddb\` | PB 值 | funddb（韭圈儿） | 每日 |
+| 指标中文名 | indicator_id | AKShare 接口 | 输入参数 | 关键输出字段 | 数据来源 | 采集频率 |
+|:---|:---|:---|:---|:---|:---|:---|
+| 北向资金净流入 | north_money | \`stock_hsgt_north_net_flow_in_em\` | \`symbol="北上"\` | \`value\`（单位：万元） | 东方财富 | 每日 |
 
-> 股债收益率差、两融余额占流通市值比为派生指标，由前端或分析层计算，不单独采集。
+> 时间字段为 \`date\`。如需分拆沪股通/深股通，将 \`symbol\` 改为 \`"沪股通"\` 或 \`"深股通"\`。
+
+> **重要**：旧接口 \`stock_hsgt_hist_em\` 自 2024-08-19 起数据缺失，已弃用，改用 \`stock_hsgt_north_net_flow_in_em\`。
+
+### 1.5 市场估值与情绪（Valuation）
+
+| 指标中文名 | indicator_id | AKShare 接口 | 输入参数 | 关键输出字段 | 数据来源 | 采集频率 |
+|:---|:---|:---|:---|:---|:---|:---|
+| 沪深300 市盈率 | hs300_pe | \`index_value_hist_funddb\` | \`symbol="沪深300", indicator="市盈率"\` | \`市盈率\` | funddb（韭圈儿） | 每日 |
+| 沪深300 市净率 | hs300_pb | \`index_value_hist_funddb\` | \`symbol="沪深300", indicator="市净率"\` | \`市净率\` | funddb（韭圈儿） | 每日 |
+
+> 时间字段为 \`日期\`。输出字段名与 \`indicator\` 参数值相同（如 \`indicator="市盈率"\` 则字段名为 \`市盈率\`）。
+
+> \`symbol\` 的具体名称需先调用 \`ak.index_value_name_funddb()\` 获取列表确认（实际名称为"沪深300"）。
 
 ---
 
@@ -134,8 +150,8 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
 | 开/收/高/低价 | Tushare | \`daily\` | \`open\`, \`close\`, \`high\`, \`low\` | 每日 | - |
 | 成交量 | Tushare | \`daily\` | \`vol\` | 每日 | 单位：手 |
 | 成交额 | Tushare | \`daily\` | \`amount\` | 每日 | 单位：千元，写入时换算为元 |
-| 市盈率TTM | Tushare | \`daily_basic\` | \`pe_ttm\` | 每日 | - |
-| 市净率MRQ | Tushare | \`daily_basic\` | \`pb\` | 每日 | - |
+| 市盈率 TTM | Tushare | \`daily_basic\` | \`pe_ttm\` | 每日 | - |
+| 市净率 MRQ | Tushare | \`daily_basic\` | \`pb\` | 每日 | - |
 | 总市值 | Tushare | \`daily_basic\` | \`total_mv\` | 每日 | 单位：万元，写入时换算为元 |
 
 ---
@@ -166,7 +182,7 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
 
 ---
 
-## 6. AKShare 安装与使用说明
+## 6. AKShare 安装与使用示例
 
 \`\`\`bash
 pip install akshare
@@ -175,19 +191,42 @@ pip install akshare
 \`\`\`python
 import akshare as ak
 
-# 宏观数据示例
-gdp_df = ak.macro_china_gdp()              # GDP 季度数据
-cpi_df = ak.macro_china_cpi()              # CPI 月度数据
-pmi_df = ak.macro_china_pmi()              # PMI 月度数据
-m2_df  = ak.macro_china_money_supply()     # M2 货币供应量
-lpr_df = ak.macro_china_lpr()             # LPR 利率
-bond_df = ak.bond_zh_us_rate(start_date="20100101")  # 中美国债收益率
-north_df = ak.stock_hsgt_hist_em(symbol="北向资金")  # 北向资金
-pe_df = ak.index_value_hist_funddb(symbol="沪深300", indicator="PE")  # 沪深300 PE
+# 1. 宏观经济
+gdp_df  = ak.macro_china_gdp()                    # 字段: 季度, 国内生产总值-同比增长
+cpi_df  = ak.macro_china_cpi()                    # 字段: 月份, 全国-同比增长
+ppi_df  = ak.macro_china_ppi()                    # 字段: 月份, 当月同比增长
+pmi_df  = ak.macro_china_pmi()                    # 字段: 月份, 制造业-指数, 非制造业-指数
+
+# 2. 流动性与货币政策
+m2_df   = ak.macro_china_money_supply()            # 字段: 月份, 货币和准货币(M2)-同比增长
+cr_df   = ak.macro_china_new_financial_credit()    # 字段: 月份, 当月（单位: 亿元）
+lpr_df  = ak.macro_china_lpr()                    # 字段: TRADE_DATE, LPR1Y, LPR5Y
+rrr_df  = ak.macro_china_reserve_requirement_ratio()  # 字段: 公布时间, 大型金融机构-调整后
+sh_df   = ak.macro_china_shibor_all()              # 字段: 日期, 1W-定价
+
+# 3. 利率与市场利差
+bond_df = ak.bond_zh_us_rate(start_date="20100101")  # 字段: 日期, 中国国债收益率10年, 美国国债收益率10年
+
+# 4. 市场资金流向
+north_df = ak.stock_hsgt_north_net_flow_in_em(symbol="北上")  # 字段: date, value（万元）
+
+# 5. 市场估值
+pe_df   = ak.index_value_hist_funddb(symbol="沪深300", indicator="市盈率")  # 字段: 日期, 市盈率
+pb_df   = ak.index_value_hist_funddb(symbol="沪深300", indicator="市净率")  # 字段: 日期, 市净率
 \`\`\`
 
-> **注意**：AKShare 数据来源为公开网站，存在被限频或接口变更的风险。建议采集时加入重试机制，并定期验证接口可用性。
-`,
+---
+
+## 7. 注意事项与风险提示
+
+| 风险项 | 说明 |
+|:---|:---|
+| 接口限频 | AKShare 数据来源为公开网站，频繁请求可能被限频，建议采集时加入 \`time.sleep()\` 和重试机制 |
+| 接口变更 | 公开网站页面结构可能变更导致接口失效，建议定期验证接口可用性 |
+| 字段名动态 | \`index_value_hist_funddb\` 输出字段名与 \`indicator\` 参数值相同，如 \`indicator="市盈率"\` 则字段名为 \`市盈率\` |
+| 人民币汇率 | \`macro_china_rmb\` 数据仅到 2021-05，暂不采集，候选替代方案：\`currency_boc_sina\`（中国银行汇率） |
+| 历史起始时间 | \`bond_zh_us_rate\` 中国国债数据从 1990-12 开始，但早期数据有大量 NaN，建议从 2010-01-01 开始采集 |
+`
   },
   {
     id: 'arch-overview',
