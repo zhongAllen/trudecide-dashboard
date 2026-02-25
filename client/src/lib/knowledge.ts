@@ -1,5 +1,5 @@
 // 每次修改 INITIAL_DOCS 时，递增此版本号，触发自动更新
-const DOCS_VERSION = 5;
+const DOCS_VERSION = 6;
 const VERSION_KEY = 'stock_knowledge_version';
 
 export interface KnowledgeDoc {
@@ -226,6 +226,50 @@ pb_df   = ak.index_value_hist_funddb(symbol="沪深300", indicator="市净率") 
 | 字段名动态 | \`index_value_hist_funddb\` 输出字段名与 \`indicator\` 参数值相同，如 \`indicator="市盈率"\` 则字段名为 \`市盈率\` |
 | 人民币汇率 | \`macro_china_rmb\` 数据仅到 2021-05，暂不采集，候选替代方案：\`currency_boc_sina\`（中国银行汇率） |
 | 历史起始时间 | \`bond_zh_us_rate\` 中国国债数据从 1990-12 开始，但早期数据有大量 NaN，建议从 2010-01-01 开始采集 |
+
+---
+
+## 8. 环境变量配置
+
+数据采集脚本运行时，所有凭证通过环境变量注入，**实际值存储在项目根目录的 `.env` 文件中，已加入 `.gitignore`，禁止提交到 Git**。
+
+### 8.1 凭证清单
+
+| 变量名 | 用途 | 权限级别 | 使用方 |
+|:---|:---|:---|:---|
+| \`SUPABASE_URL\` | Supabase 项目地址 | 公开 | 后端脚本 + 前端 |
+| \`SUPABASE_SERVICE_KEY\` | 服务端密钥，绕过 RLS，完整读写权限 | **高度敏感** | 仅后端/采集脚本 |
+| \`SUPABASE_ANON_KEY\` | 匿名公开密钥，受 RLS 策略限制 | 低敏感 | 前端 React |
+| \`TUSHARE_TOKEN\` | Tushare Pro 接口调用凭证 | 中等敏感 | 仅后端/采集脚本 |
+
+> AKShare 无需任何 API Key，安装后直接使用。
+
+### 8.2 Python 采集脚本中的使用方式
+
+\`\`\`python
+import os
+from supabase import create_client
+
+# 从环境变量读取凭证（不要硬编码在代码中）
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")  # 采集脚本使用 service_role
+TUSHARE_TOKEN = os.environ.get("TUSHARE_TOKEN")
+
+# 初始化 Supabase 客户端
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# 初始化 Tushare
+import tushare as ts
+ts.set_token(TUSHARE_TOKEN)
+pro = ts.pro_api()
+\`\`\`
+
+### 8.3 安全规范
+
+- \`SUPABASE_SERVICE_KEY\` 拥有完整数据库权限，**只能在服务端 Python 脚本中使用**，绝对不能出现在前端代码或 Git 仓库中
+- \`SUPABASE_ANON_KEY\` 可以安全暴露在前端代码中，但依赖 Supabase RLS 行级安全策略保护数据
+- 凭证过期时间：Service Key 和 Anon Key 的 JWT 过期时间为 **2084-09-26**（约 60 年），无需定期轮换
+- Tushare Token 无过期时间，但如发生泄露需立即在 Tushare 控制台重置
 `
   },
   {
