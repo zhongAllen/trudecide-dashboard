@@ -1,5 +1,5 @@
 // 每次修改 INITIAL_DOCS 时，递增此版本号，触发自动更新
-const DOCS_VERSION = 3;
+const DOCS_VERSION = 4;
 const VERSION_KEY = 'stock_knowledge_version';
 
 export interface KnowledgeDoc {
@@ -25,15 +25,17 @@ const STORAGE_KEY = 'stock_knowledge_docs';
 
 const INITIAL_DOCS: KnowledgeDoc[] = [
   {
-    id: 'data-collection-v1',
+    id: 'data-collection-v2',
     category: 'requirement',
-    title: '数据采集需求文档 v1',
-    tags: ['数据采集', 'Tushare', '宏观指标', '板块', '个股', '新闻'],
+    title: '数据采集需求文档 v2（AKShare 公开版）',
+    tags: ['数据采集', 'AKShare', '宏观指标', '板块', '个股', '新闻', '免费公开数据'],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    content: `# 数据采集需求文档 v1
+    content: `# 数据采集需求文档 v2（AKShare 公开版）
 
-本需求文档基于已确定的 **数据库 Schema v2** 和 **指标体系**，明确宏观、板块、个股、新闻四大类数据的采集范围、来源、频率和字段映射关系。所有数据采集工作围绕 **Tushare Pro API** 展开。
+本需求文档基于已确定的 **数据库 Schema v2** 和 **指标体系**，明确宏观、板块、个股、新闻四大类数据的采集范围、来源、频率和字段映射关系。
+
+**核心决策**：宏观指标数据采集全部使用 **AKShare 开源 Python 库**，封装了东方财富、新浪财经、国家统计局、中国债券信息网等公开网站数据，**完全免费、无需注册、无需 API Key**。个股和板块数据仍沿用 Tushare Pro（已有 Token）。
 
 ---
 
@@ -45,41 +47,42 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
 
 ### 1.1 宏观经济（Economy）
 
-| 指标中文名 | indicator_id | Tushare 接口 | Tushare 字段 | 采集频率 |
-|:---|:---|:---|:---|:---|
-| GDP增速 | gdp_yoy | \`cn_gdp\` | \`gdp_yoy\` | 季度 |
-| CPI | cpi_nt | \`cn_cpi\` | \`nt_val\` | 月度 |
-| PPI | ppi_yoy | \`cn_ppi\` | \`ppi_yoy\` | 月度 |
-| PMI（制造业） | pmi_mfg | \`pmi\` | \`pmi\` | 月度 |
-| 城镇调查失业率 | unemploy_rate | \`cn_m\` | \`unemploy_rate\` | 月度 |
+| 指标中文名 | indicator_id | AKShare 接口 | 关键字段 | 数据来源 | 采集频率 |
+|:---|:---|:---|:---|:---|:---|
+| GDP 增速 | gdp_yoy | \`macro_china_gdp\` | \`国内生产总值-同比增长\` | 东方财富 | 季度 |
+| CPI 同比 | cpi_yoy | \`macro_china_cpi\` | \`全国-同比增长\` | 东方财富 | 月度 |
+| PPI 同比 | ppi_yoy | \`macro_china_ppi\` | \`当月同比增长\` | 东方财富 | 月度 |
+| PMI（制造业） | pmi_mfg | \`macro_china_pmi\` | \`制造业-指数\` | 东方财富 | 月度 |
+| PMI（非制造业） | pmi_non_mfg | \`macro_china_pmi\` | \`非制造业-指数\` | 东方财富 | 月度 |
 
 ### 1.2 流动性与货币政策（Liquidity）
 
-| 指标中文名 | indicator_id | Tushare 接口 | Tushare 字段 | 采集频率 |
-|:---|:---|:---|:---|:---|
-| M2货币供应量同比 | m2_yoy | \`cn_m\` | \`m2_yoy\` | 月度 |
-| 社融增量 | sfa_amount | \`get_cfa\` | \`amount\` | 月度 |
-| 1年期LPR | lpr_1y | \`shibor\` | \`1y\` | 每日 |
-| 10年期国债收益率 | bond_10y | \`bond_yield_cn\` | \`10y\` | 每日 |
-| 1周Shibor | shibor_1w | \`shibor\` | \`1w\` | 每日 |
+| 指标中文名 | indicator_id | AKShare 接口 | 关键字段 | 数据来源 | 采集频率 |
+|:---|:---|:---|:---|:---|:---|
+| M2 货币供应量同比 | m2_yoy | \`macro_china_money_supply\` | \`货币和准货币(M2)-同比增长\` | 东方财富 | 月度 |
+| 社融增量（当月） | sfa_amount | \`macro_china_new_financial_credit\` | 当月新增信贷 | 东方财富 | 月度 |
+| 1年期 LPR | lpr_1y | \`macro_china_lpr\` | \`LPR1Y\` | 东方财富 | 每次调整 |
+| 存款准备金率（大型机构） | rrr_large | \`macro_china_reserve_requirement_ratio\` | \`大型金融机构-调整后\` | 东方财富 | 每次调整 |
+| 1周 Shibor | shibor_1w | \`macro_china_shibor_all\` | \`1W-定价\` | 金十数据 | 每日 |
 
 ### 1.3 政策与预期（Policy）
 
-| 指标中文名 | indicator_id | Tushare 接口 | Tushare 字段 | 采集频率 |
-|:---|:---|:---|:---|:---|
-| 人民币汇率（离岸） | usdcnh | \`forex_daily\` | \`close\` | 每日 |
-| 北向资金净流入 | north_money | \`moneyflow_hsgt\` | \`north_money\` | 每日 |
+| 指标中文名 | indicator_id | AKShare 接口 | 关键字段 | 数据来源 | 采集频率 |
+|:---|:---|:---|:---|:---|:---|
+| 10年期中国国债收益率 | bond_10y | \`bond_zh_us_rate\` | \`中国国债收益率10年\` | 东方财富 | 每日 |
+| 10年期美国国债收益率 | us_bond_10y | \`bond_zh_us_rate\` | \`美国国债收益率10年\` | 东方财富 | 每日 |
+| 北向资金净流入 | north_money | \`stock_hsgt_hist_em\` | 北向资金净买入 | 东方财富 | 每日 |
+
+> 人民币汇率（USD/CNY）：\`macro_china_rmb\` 接口数据仅到 2021-05，暂不采集，待后续评估替代方案（中国银行汇率 \`currency_boc_sina\`）。
 
 > 财政政策和产业政策为定性指标，通过 \`news\` 表采集相关新闻和公告进行分析，不直接采集数值。
 
 ### 1.4 市场估值与情绪（Valuation）
 
-| 指标中文名 | indicator_id | Tushare 接口 | Tushare 字段 | 采集频率 |
-|:---|:---|:---|:---|:---|
-| 沪深300 PE(TTM) | hs300_pe_ttm | \`index_dailybasic\` | \`pe_ttm\` | 每日 |
-| 沪深300 PB | hs300_pb | \`index_dailybasic\` | \`pb\` | 每日 |
-| 全A PE(TTM) | all_a_pe_ttm | \`index_dailybasic\` | \`pe_ttm\` | 每日 |
-| 融资余额 | margin_rzye | \`margin_detail\` | \`rzye\` | 每日 |
+| 指标中文名 | indicator_id | AKShare 接口 | 关键字段 | 数据来源 | 采集频率 |
+|:---|:---|:---|:---|:---|:---|
+| 沪深300 PE(TTM) | hs300_pe_ttm | \`index_value_hist_funddb\` | PE 值 | funddb（韭圈儿） | 每日 |
+| 沪深300 PB | hs300_pb | \`index_value_hist_funddb\` | PB 值 | funddb（韭圈儿） | 每日 |
 
 > 股债收益率差、两融余额占流通市值比为派生指标，由前端或分析层计算，不单独采集。
 
@@ -93,19 +96,19 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
 
 ### 2.1 板块定义（写入 sector_meta）
 
-| 板块分类 | type 值 | Tushare 接口 | 采集频率 |
-|:---|:---|:---|:---|
-| 申万一级行业（31个） | \`sw_l1\` | \`index_classify\` | 每月 |
-| 概念板块 | \`concept\` | \`concept\` | 每月 |
-| 沪深300 | \`hs300\` | \`index_basic\` | 每月 |
-| 中证500 | \`zz500\` | \`index_basic\` | 每月 |
+| 板块分类 | type 值 | 接口来源 | 接口名 | 采集频率 |
+|:---|:---|:---|:---|:---|
+| 申万一级行业（31个） | \`sw_l1\` | Tushare | \`index_classify\` | 每月 |
+| 概念板块 | \`concept\` | Tushare | \`concept\` | 每月 |
+| 沪深300 | \`hs300\` | Tushare | \`index_basic\` | 每月 |
+| 中证500 | \`zz500\` | Tushare | \`index_basic\` | 每月 |
 
 ### 2.2 板块成分股（写入 sector_stock_map）
 
-| 板块分类 | Tushare 接口 | 关键参数 | 采集频率 |
-|:---|:---|:---|:---|
-| 申万行业/指数成分 | \`index_member\` | \`index_code\` | 每月 |
-| 概念板块成分 | \`concept_detail\` | \`concept_id\` | 每月 |
+| 板块分类 | 接口来源 | 接口名 | 关键参数 | 采集频率 |
+|:---|:---|:---|:---|:---|
+| 申万行业/指数成分 | Tushare | \`index_member\` | \`index_code\` | 每月 |
+| 概念板块成分 | Tushare | \`concept_detail\` | \`concept_id\` | 每月 |
 
 > 成分股变更时，将旧关系的 \`expiry_date\` 置为调整日，并插入新关系记录（\`effective_date\` = 调整日）。
 
@@ -117,23 +120,23 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
 
 ### 3.1 个股基础信息（写入 stock_meta）
 
-| 字段 | Tushare 接口 | Tushare 字段 | 采集频率 |
-|:---|:---|:---|:---|
-| 股票代码 | \`stock_basic\` | \`ts_code\` | 每周 |
-| 股票名称 | \`stock_basic\` | \`name\` | 每周 |
-| 上市日期 | \`stock_basic\` | \`list_date\` | 每周 |
-| 交易所 | \`stock_basic\` | \`exchange\` | 每周 |
+| 字段 | 接口来源 | 接口名 | 字段名 | 采集频率 |
+|:---|:---|:---|:---|:---|
+| 股票代码 | Tushare | \`stock_basic\` | \`ts_code\` | 每周 |
+| 股票名称 | Tushare | \`stock_basic\` | \`name\` | 每周 |
+| 上市日期 | Tushare | \`stock_basic\` | \`list_date\` | 每周 |
+| 交易所 | Tushare | \`stock_basic\` | \`exchange\` | 每周 |
 
 ### 3.2 个股日度数据（写入 stock_daily）
 
-| 字段 | Tushare 接口 | Tushare 字段 | 采集频率 | 备注 |
-|:---|:---|:---|:---|:---|
-| 开/收/高/低价 | \`daily\` | \`open\`, \`close\`, \`high\`, \`low\` | 每日 | - |
-| 成交量 | \`daily\` | \`vol\` | 每日 | 单位：手 |
-| 成交额 | \`daily\` | \`amount\` | 每日 | 单位：千元，写入时换算为元 |
-| 市盈率TTM | \`daily_basic\` | \`pe_ttm\` | 每日 | - |
-| 市净率MRQ | \`daily_basic\` | \`pb\` | 每日 | - |
-| 总市值 | \`daily_basic\` | \`total_mv\` | 每日 | 单位：万元，写入时换算为元 |
+| 字段 | 接口来源 | 接口名 | 字段名 | 采集频率 | 备注 |
+|:---|:---|:---|:---|:---|:---|
+| 开/收/高/低价 | Tushare | \`daily\` | \`open\`, \`close\`, \`high\`, \`low\` | 每日 | - |
+| 成交量 | Tushare | \`daily\` | \`vol\` | 每日 | 单位：手 |
+| 成交额 | Tushare | \`daily\` | \`amount\` | 每日 | 单位：千元，写入时换算为元 |
+| 市盈率TTM | Tushare | \`daily_basic\` | \`pe_ttm\` | 每日 | - |
+| 市净率MRQ | Tushare | \`daily_basic\` | \`pb\` | 每日 | - |
+| 总市值 | Tushare | \`daily_basic\` | \`total_mv\` | 每日 | 单位：万元，写入时换算为元 |
 
 ---
 
@@ -143,10 +146,10 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
 
 核心原则：采集后 \`analyzed_at\` 字段为 NULL，等待 AI 分析 Skill 进行情感分析和摘要提取。
 
-| 新闻分类 | category 值 | Tushare 接口 | 采集频率 | 关联说明 |
-|:---|:---|:---|:---|:---|
-| 宏观新闻 | \`macro\` | \`news\` | 每小时 | \`related_id\` 置空，\`source='cctv'\` |
-| 行业/个股新闻 | \`sector\` / \`stock\` | \`news\` | 每小时 | 采集后由 AI 分析 Skill 补充 \`related_id\` |
+| 新闻分类 | category 值 | 接口来源 | 接口名 | 采集频率 | 关联说明 |
+|:---|:---|:---|:---|:---|:---|
+| 宏观新闻 | \`macro\` | Tushare | \`news\` | 每小时 | \`related_id\` 置空，\`source='cctv'\` |
+| 行业/个股新闻 | \`sector\` / \`stock\` | Tushare | \`news\` | 每小时 | 采集后由 AI 分析 Skill 补充 \`related_id\` |
 
 ---
 
@@ -157,9 +160,33 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
 | P0（立即） | 个股日度数据（stock_daily） | 是板块估值聚合计算的基础 |
 | P0（立即） | 个股基础信息（stock_meta） | 是所有关联的前提 |
 | P0（立即） | 板块成分股（sector_stock_map） | 是板块分析的核心 |
-| P1（本周） | 宏观指标（indicator_values） | 宏观分析的数据源 |
+| P1（本周） | 宏观指标（indicator_values） | 宏观分析的数据源，使用 AKShare 免费采集 |
 | P1（本周） | 板块定义（sector_meta） | 支撑板块分析 |
 | P2（下周） | 新闻数据（news） | 依赖 AI 分析 Skill |
+
+---
+
+## 6. AKShare 安装与使用说明
+
+\`\`\`bash
+pip install akshare
+\`\`\`
+
+\`\`\`python
+import akshare as ak
+
+# 宏观数据示例
+gdp_df = ak.macro_china_gdp()              # GDP 季度数据
+cpi_df = ak.macro_china_cpi()              # CPI 月度数据
+pmi_df = ak.macro_china_pmi()              # PMI 月度数据
+m2_df  = ak.macro_china_money_supply()     # M2 货币供应量
+lpr_df = ak.macro_china_lpr()             # LPR 利率
+bond_df = ak.bond_zh_us_rate(start_date="20100101")  # 中美国债收益率
+north_df = ak.stock_hsgt_hist_em(symbol="北向资金")  # 北向资金
+pe_df = ak.index_value_hist_funddb(symbol="沪深300", indicator="PE")  # 沪深300 PE
+\`\`\`
+
+> **注意**：AKShare 数据来源为公开网站，存在被限频或接口变更的风险。建议采集时加入重试机制，并定期验证接口可用性。
 `,
   },
   {
