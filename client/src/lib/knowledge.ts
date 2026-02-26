@@ -1,5 +1,5 @@
 // 每次修改 INITIAL_DOCS 时，递增此版本号，触发自动更新
-const DOCS_VERSION = 10;
+const DOCS_VERSION = 12;
 const VERSION_KEY = 'stock_knowledge_version';
 
 export interface KnowledgeDoc {
@@ -24,6 +24,195 @@ export const CATEGORY_META: Record<KnowledgeDoc['category'], { label: string; co
 const STORAGE_KEY = 'stock_knowledge_docs';
 
 const INITIAL_DOCS: KnowledgeDoc[] = [
+    {
+     id: 'system-design-v1',
+    category: 'decision_log',
+    title: '系统设计 v1：数据采集架构与决策日志',
+    tags: ['系统设计', '架构', '决策', '数据采集', 'AKShare', 'Supabase', '数据源', 'API', 'ETL'],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    content: `# 系统设计 v1：数据采集架构与决策日志
+
+本文档阐述 Trudecide 股票版项目的数据采集架构、核心设计原则以及在开发过程中做出的关键技术决策，旨在为项目的维护和迭代提供清晰的上下文和“第一性原理”参考。
+
+---
+
+## 1. 核心设计原则
+
+1.  **代码即文档 (Code as Documentation)**: 采集逻辑、数据源选择、字段映射等核心信息必须在代码（脚本、SQL）和知识库文档中保持同步。注释应解释“Why”，而不是“What”。
+2.  **数据源可靠性优先**: 优先选择官方、稳定、有持续维护的公开数据源。在多源可选时，优先选择 API 接口而非页面抓取。
+3.  **自动化与可复现**: 所有数据采集和处理流程必须代码化，杜绝手动操作。脚本应支持幂等性（重复执行结果一致）和可回填（能一次性采集所有历史数据）。
+4.  **分层解耦**: 数据模型（Schema）、采集脚本（ETL）、前端展示（Frontend）三层分离，各自独立演进。
+
+---
+
+## 2. 数据采集架构
+
+本项目的宏观数据采集流程是一个典型的 ETL（Extract, Transform, Load）过程：
+
+```mermaid
+graph TD
+    subgraph Extract [1. 数据提取]
+        A[AKShare] --> C{采集脚本};
+        B[国家统计局 API] --> C;
+        D[商务部 API] --> C;
+    end
+
+    subgraph Transform [2. 数据转换]
+        C -- pandas DataFrame --> E[数据清洗/转换];
+    end
+
+    subgraph Load [3. 数据加载]
+        E -- JSON (records) --> F[Supabase API];
+        F -- upsert --> G[(Supabase DB)];
+    end
+
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#f9f,stroke:#333,stroke-width:2px
+    style D fill:#f9f,stroke:#333,stroke-width:2px
+    style C fill:#ccf,stroke:#333,stroke-width:2px
+    style E fill:#cfc,stroke:#333,stroke-width:2px
+    style F fill:#ffc,stroke:#333,stroke-width:2px
+    style G fill:#cff,stroke:#333,stroke-width:2px
+```
+
+-   **Extract**: 主要使用 `AKShare` 库作为统一入口，对于 AKShare 无法稳定访问的数据源（如商务部、国家统计局），则通过自定义的 `requests` 逻辑直接请求其底层 API。
+-   **Transform**: 使用 `pandas` 库进行数据处理，包括：
+    -   字段重命名（映射到数据库字段）
+    -   数据类型转换（如日期字符串转 `datetime`）
+    -   数据计算（如从累计值计算单季值）
+    -   数据标准化（如单位统一为“亿元”）
+-   **Load**: 通过纯 `requests` 调用 Supabase 的 REST API 进行数据写入。采用 `upsert` 模式（`Prefer: resolution=merge-duplicates`），确保数据不重复且支持重跑。
+
+---
+
+## 3. 关键技术决策日志
+
+### 3.1 数据源选型
+
+-   **决策**: 宏观指标主要使用 **AKShare**。
+-   **理由 (Why)**:
+    1.  **免费与开放**: 完全免费，无需 API Key 或积分，降低了项目启动和维护成本。
+    2.  **覆盖面广**: 封装了东方财富、金十数据、国家统计局等多个主流财经数据源，满足了绝大部分宏观指标需求。
+    3.  **社区活跃**: 作为国内流行的开源财经数据库，社区活跃，接口更新快。
+-   **权衡**: 放弃了 Tushare 的宏观接口，尽管其数据更规整，但需要积分，不符合本项目低成本、高可用的原则。个股数据仍将使用 Tushare，因其在个股领域的专业性和数据质量更高。
+
+### 3.2 数据库 Schema 设计
+
+-   **决策**: 采用 `indicator_meta` (元数据) 和 `indicator_values` (时序数据) 的分离设计，并在 `indicator_values` 主键中加入 `region` 字段。
+-   **理由 (Why)**:
+    1.  **支持多国数据**: `region` 字段（如 'CN', 'US'）的引入，使得单一指标（如 `cpi_yoy`）可以存储多个国家的数据，避免了 `cn_cpi_yoy`, `us_cpi_yoy` 这种冗余且难以扩展的 ID 设计。
+    2.  **查询效率**: 将指标的描述性信息（名称、单位、来源等）和高频更新的时序数据分离，可以提高时序数据表的查询和写入性能。
+    3.  **主键设计**: `(indicator_id, trade_date, revision_seq, region)` 的复合主键确保了同一指标、同一天、同一国家的数据唯一性，同时 `revision_seq` 为未来可能的数据修正（如 GDP 初值、终值）预留了空间。
+
+### 3.3 SSL/TLS 握手失败解决方案
+
+-   **决策**: 针对商务部、国家统计局等接口的 SSL 握手失败问题，采用**自定义 `TLSAdapter`** 的方案。
+-   **理由 (Why)**:
+    1.  **根源解决**: 问题根源是目标服务器 TLS 版本过低，而非证书错误。因此，简单的 `verify=False` 无效。
+    2.  **最小化影响**: 通过 `requests.Session` 和 `mount`，只对特定域名（如 `data.mofcom.gov.cn`）使用降级的 TLS 配置，不影响与其他现代网站的通信安全，远优于全局修改 OpenSSL 配置。
+    3.  **代码化**: 该方案完全在 Python 代码中实现，无需修改沙箱环境配置，保证了脚本的可移植性。
+
+### 3.4 数据缺失的替代与计算
+
+-   **决策**: 对于 AKShare 无法直接提供的指标，采取“替代”或“计算”的策略。
+-   **理由 (Why)**:
+    1.  **业务连续性**: 保证核心指标不空缺，即使数据源不完美。例如，使用高度相关的 FR 利率替代 DR 利率，对于宏观趋势分析是可接受的。
+    2.  **数据挖掘**: 从现有数据中派生新数据是数据分析的常见手段。例如，从 GDP 累计值计算单季环比，是基于公开数据还原真实经济活动的必要步骤。
+    3.  **透明度**: 所有替代和计算逻辑都在采集脚本的注释和本文档中明确记录，使用者清楚数据的来源和处理过程，避免误读。
+`
+    },
+
+    {
+    id: 'pitfall-log-v1',
+    category: 'pitfall',
+    title: '踩坑记录 v1：数据采集 & Supabase 交互',
+    tags: ['踩坑', 'Supabase', 'AKShare', 'RLS', 'SSL', 'TLS', '数据源', 'API'],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    content: `# 踩坑记录 v1：数据采集 & Supabase 交互
+
+本文档记录在开发宏观指标数据采集脚本过程中遇到的关键问题、失败路径、根本原因及最终解决方案，旨在为后续开发（尤其是 AI 参与的开发）提供“排雷”指南，避免重复踩坑。
+
+---
+
+## 1. Supabase RLS 策略导致写入失败
+
+-   **现象**: `supabase.table(...).upsert(...)` 或 `requests.post(...)` 写入数据时，返回 HTTP 403/404 错误，提示违反行级别安全（RLS）策略。
+-   **失败路径**:
+    1.  最初怀疑是 `service_role` Key 无效，更换后问题依旧。
+    2.  怀疑是网络问题，但 `select` 操作正常。
+    3.  怀疑是 `upsert` 方法本身有问题，改用 `insert`，部分成功但无法处理冲突。
+-   **根本原因**:
+    1.  **`upsert` 需要 `UPDATE` 权限**：`upsert` 操作在数据库层面是一个原子性的“插入或更新”操作，因此要求执行角色同时具备 `INSERT` 和 `UPDATE` 权限。初版 RLS 策略仅为 `service_role` 授予了 `INSERT` 权限。
+    2.  **SDK 参数触发复杂检查**：Supabase Python SDK 的 `upsert` 方法会生成带有 `?on_conflict=...&columns=...` 参数的 URL，这会触发更严格的 RLS 检查，比简单的 `POST` 请求更容易失败。
+-   **最终解决方案**:
+    1.  **修正 RLS 策略**：在 Supabase Dashboard 的 SQL Editor 中，将 `indicator_values` 表针对 `service_role` 的策略从 `FOR INSERT` 修改为 `FOR ALL`，授予其完整的写权限。
+        ```sql
+        -- 删除旧策略
+        DROP POLICY IF EXISTS "service_role can insert indicator_values" ON indicator_values;
+        -- 创建新的统一写入策略
+        CREATE POLICY "service_role_write_all" ON indicator_values FOR ALL TO service_role USING (true) WITH CHECK (true);
+        ```
+    2.  **绕过 SDK，使用纯 `requests`**：为确保稳定性，所有写入操作统一改用 `requests.post`，并在请求头中加入 `"Prefer": "resolution=merge-duplicates"`。这个组合最简单、最可靠，只要求 `INSERT` + `UPDATE` 权限，不会触发额外参数检查。
+
+---
+
+## 2. AKShare 部分接口 SSL/TLS 握手失败
+
+-   **现象**: 调用某些 AKShare 接口（如 `macro_china_shrzgm`、`macro_china_urban_unemployment`）时，在沙箱环境中报 `SSLV3_ALERT_HANDSHAKE_FAILURE` 或 `CERTIFICATE_VERIFY_FAILED`。
+-   **失败路径**:
+    1.  尝试在 `requests` 中加入 `verify=False`，无效。
+    2.  尝试全局禁用 SSL 验证，有安全风险且不一定奏效。
+-   **根本原因**: **目标服务器 TLS 版本过低**。这些接口的数据源（如商务部 `data.mofcom.gov.cn`、国家统计局 `data.stats.gov.cn`）使用的 TLS 协议版本较低（如 TLS 1.0/1.1），而 Manus 沙箱环境中的 OpenSSL 默认安全级别（`SECLEVEL=2`）要求 TLS 1.2+，导致握手失败。
+-   **最终解决方案**:
+    1.  **直接请求 API，绕过 AKShare**：通过浏览器抓包等方式找到原始 API 地址。
+    2.  **自定义 `TLSAdapter`**：编写一个 `requests.adapters.HTTPAdapter` 的子类，在其中创建一个自定义的 `ssl.Context`，并强制设置加密套件的安全级别为 `SECLEVEL=1`，允许与旧版 TLS 服务器通信。
+        ```python
+        import ssl
+        import requests
+        from requests.adapters import HTTPAdapter
+
+        class TLSAdapter(HTTPAdapter):
+            def init_poolmanager(self, *args, **kwargs):
+                ctx = ssl.create_default_context()
+                ctx.set_ciphers('DEFAULT@SECLEVEL=1') # 核心：降低安全级别
+                kwargs['ssl_context'] = ctx
+                return super().init_poolmanager(*args, **kwargs)
+
+        session = requests.Session()
+        session.mount("https://", TLSAdapter())
+        # 使用 session 对象发出请求
+        response = session.post(url, ...)
+        ```
+    3.  **应用场景**：此方法成功解决了**社融增量**（商务部）和**城镇调查失业率**（国家统计局）的数据采集问题。
+
+---
+
+## 3. 数据源接口不一致与数据缺失
+
+-   **现象**: 需求文档中的某些指标在 AKShare 中找不到完全对应的接口，或接口返回的数据不符合预期。
+-   **案例与解决方案**:
+    -   **DR001/DR007**: AKShare 无直接接口。**决策**：使用高度相关的银行间质押式回购利率 **FR001/FR007** (`repo_rate_hist`) 作为替代，并在文档中明确标注。
+    -   **GDP 季比 (`gdp_qoq`)**: `macro_china_gdp` 接口只提供累计同比。**决策**：从累计绝对值数据中**反算单季度绝对值**，再手动计算环比（QoQ），这是在无法获取原始数据时的标准处理方法。
+    -   **全市场 PB (`all_a_pb`)**: AKShare 无直接的全市场 PB 接口。**决策**：分别获取上证（`sh`）和深证（`sz`）的 PB 数据，然后**取其均值**作为全 A 市场的近似值。
+
+---
+
+## 4. 数据库 ID 命名规范化迁移
+
+-   **现象**: 初期采集的 14 个指标 ID 带有 `cn_` 前缀（如 `cn_cpi_yoy`），与后期规划（`region` 字段 + 无前缀 ID）不一致。
+-   **失败路径**: 直接 `UPDATE indicator_values SET indicator_id = 'cpi_yoy' WHERE indicator_id = 'cn_cpi_yoy'` 会因违反外键约束而失败，因为 `indicator_meta` 表中尚不存在 `cpi_yoy` 这个 ID。
+-   **根本原因**: **外键约束要求操作有序**。
+-   **最终解决方案**: 编写了一个事务性的 SQL 迁移脚本，严格遵循以下顺序：
+    1.  **`INSERT` 新 ID**：在 `indicator_meta` 中插入不带前缀的新版 ID 记录。
+    2.  **`UPDATE` 子表**：更新 `indicator_values` 表，将其 `indicator_id` 从旧版 `cn_*` ID 更新为新版 ID。
+    3.  **`DELETE` 旧 ID**：从 `indicator_meta` 中删除所有旧的 `cn_*` ID 记录。
+    4.  **重建主键**：将 `region` 字段加入 `indicator_values` 的主键，以支持多国数据。
+
+这条经验对于未来任何涉及主外键关系的数据迁移都至关重要。`
+    },
+
     {
     id: 'data-collection-v3',
     category: 'requirement',
