@@ -1,5 +1,5 @@
 // 每次修改 INITIAL_DOCS 时，递增此版本号，触发自动更新
-const DOCS_VERSION = 9;
+const DOCS_VERSION = 10;
 const VERSION_KEY = 'stock_knowledge_version';
 
 export interface KnowledgeDoc {
@@ -27,11 +27,13 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
     {
     id: 'data-collection-v3',
     category: 'requirement',
-    title: '数据采集需求文档 v4（板块接口重构版）',
+    title: '数据采集需求文档 v5（指标 ID 规范化版）',
     tags: ['数据采集', 'AKShare', 'Tushare', '宏观指标', '板块', '通达信', '东方财富', '个股', '新闻', 'Supabase', 'sector_daily', 'value_type'],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    content: `# 数据采集需求文档 v4（AKShare 公开版 · 板块接口重构）
+    content: `# 数据采集需求文档 v5（AKShare 公开版 · 指标 ID 规范化）
+
+> **v5 变更**：指标 ID 全面去除 cn\_ 前缀，由 indicator_meta.region 字段区分国家。indicator_values 主键已含 region 字段。当前已完成数据库过渡并写入 5035 条 CN 历史数据。
 
 本文档是数据采集的**唯一权威参考**，开发角色 AI 在编写采集脚本时必须严格遵循本文档中的接口名称、字段名、indicator_id 命名和数据库映射关系，不得自行推断。
 
@@ -57,17 +59,15 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
 
 ---
 
-## 2. \`indicator_meta\` 表新增字段规范
+## 2. \`indicator_meta\` 表字段说明
 
-在原有 Schema 基础上，\`indicator_meta\` 表需新增以下两个字段：
+> **已执行**：\`frequency\`、\`value_type\`、\`region\` 字段均已在建表时创建，无需再执行 ALTER TABLE。当前字段实际状态：
 
-\`\`\`sql
-ALTER TABLE indicator_meta ADD COLUMN frequency TEXT;
--- 取值: 'daily' | 'monthly' | 'quarterly' | 'annual'
-
-ALTER TABLE indicator_meta ADD COLUMN value_type TEXT;
--- 取值: 'level' | 'yoy' | 'qoq' | 'mom' | 'flow' | 'rate' | 'index'
-\`\`\`
+| 字段 | 类型 | 说明 |
+|:---|:---|:---|
+| \`frequency\` | TEXT | 'daily' \| 'monthly' \| 'quarterly' \| 'annual' \| '每次调整' |
+| \`value_type\` | TEXT | 'level' \| 'yoy' \| 'qoq' \| 'mom' \| 'flow' \| 'rate' \| 'index' |
+| \`region\` | CHAR(2) | ISO 3166-1 alpha-2，默认 'CN'，区分国家/地区 |
 
 **\`value_type\` 取值说明**：
 
@@ -459,17 +459,17 @@ Tushare API          indicator_values        analyze_macro          宏观看板
   {
     id: 'data-model-v1',
     category: 'data_model',
-    title: '数据库 Schema 设计 v4.1（含 region 字段）',
+    title: '数据库 Schema 设计 v5（indicator_values 含 region，ID 规范化）',
     tags: ['Supabase', 'PostgreSQL', 'Schema', '时序数据', '数据版本控制', 'RLS', '多国指标'],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    content: `# 数据库 Schema 设计 v4.1（含 region 字段）
+    content: `# 数据库 Schema 设计 v5（indicator_values 含 region，ID 规范化）
 
-> **状态**：✅ 已在 Supabase 生产环境建表完成（2026-02-26）
-> **v4.1 变更**：indicator_meta 新增 region 字段（ISO 3166-1 alpha-2，如 CN/US/HK）
+> **状态**：✅ 已在 Supabase 生产环境建表完成并迁移（2026-02-26）
+> **v5 变更**：indicator_values 新增 region 字段并纳入主键；indicator_id 命名去 cn_ 前缀，由 region 字段区分国家
 > **Project URL**：https://ozwgqdcqtkdprvhuacjk.supabase.co
 > **建表脚本**：\`create_all_tables.sql\`（项目根目录）
-> **变更脚本**：\`add_region_field.sql\`（项目根目录）
+> **迁移脚本**：\`migrate_v2_region_and_rename.sql\`（项目根目录）
 
 ## 核心设计原则
 
@@ -486,8 +486,8 @@ Tushare API          indicator_values        analyze_macro          宏观看板
 
 | 表名 | 字段数 | 分类 | 说明 |
 |:---|:---:|:---|:---|
-| \`indicator_meta\` | 12 | 基础层 | 宏观指标元数据（含 region 字段，14条 CN 种子数据） |
-| \`indicator_values\` | 6 | 数据层 | 宏观指标时序数据 |
+| \`indicator_meta\` | 12 | 基础层 | 宏观指标元数据（含 region 字段，29条 CN 种子数据） |
+| \`indicator_values\` | 7 | 数据层 | 宏观指标时序数据（含 region 字段，主键含 region） |
 | \`sector_meta\` | 7 | 基础层 | 板块元数据（TDX+DC双体系） |
 | \`sector_stock_map\` | 5 | 基础层 | 板块-股票多对多映射 |
 | \`sector_daily\` | 15 | 数据层 | 板块日度行情 |
@@ -499,7 +499,7 @@ Tushare API          indicator_values        analyze_macro          宏观看板
 
 ## 基础层
 
-### 1. \`indicator_meta\` 指标元数据（v4.1 含 region）
+### 1. \`indicator_meta\` 指标元数据（v5 含 region，ID 不含国家前缀）
 
 \`\`\`sql
 CREATE TABLE indicator_meta (
@@ -530,24 +530,39 @@ CREATE TABLE indicator_meta (
 | \`JP\` | 日本 | 日本统计局 |
 | \`GLOBAL\` | 全球/多国汇总 | IMF WEO、世界银行 |
 
-**已预置的 14 个 CN 宏观指标**：
+**已预置的 29 个 CN 宏观指标**（indicator_id 不含国家前缀，由 region 字段区分）：
 
 | ID | 名称 | 频率 | 类型 |
 |:---|:---|:---|:---|
-| \`cn_gdp_yoy\` | GDP同比增速 | quarterly | yoy |
-| \`cn_cpi_yoy\` | CPI同比增速 | monthly | yoy |
-| \`cn_ppi_yoy\` | PPI同比增速 | monthly | yoy |
-| \`cn_pmi_mfg\` | 制造业PMI | monthly | index |
-| \`cn_pmi_service\` | 非制造业PMI | monthly | index |
-| \`cn_m2_yoy\` | M2同比增速 | monthly | yoy |
-| \`cn_social_finance\` | 社会融资规模增量 | monthly | flow |
-| \`cn_new_loans\` | 新增人民币贷款 | monthly | flow |
-| \`cn_export_yoy\` | 出口金额同比 | monthly | yoy |
-| \`cn_import_yoy\` | 进口金额同比 | monthly | yoy |
-| \`cn_industrial_yoy\` | 工业增加值同比 | monthly | yoy |
-| \`cn_retail_yoy\` | 社零总额同比 | monthly | yoy |
-| \`cn_fai_yoy\` | 固定资产投资同比 | monthly | yoy |
-| \`cn_lpr_1y\` | 1年期LPR | monthly | rate |
+| \`gdp_yoy\` | GDP同比增速 | quarterly | yoy |
+| \`gdp_level\` | GDP总量（季度） | quarterly | level |
+| \`gdp_qoq\` | GDP季比增速 | quarterly | qoq |
+| \`gdp_primary\` | 第一产业增加值 | quarterly | level |
+| \`gdp_primary_yoy\` | 第一产业同比增速 | quarterly | yoy |
+| \`gdp_secondary\` | 第二产业增加值 | quarterly | level |
+| \`gdp_secondary_yoy\` | 第二产业同比增速 | quarterly | yoy |
+| \`gdp_tertiary\` | 第三产业增加值 | quarterly | level |
+| \`gdp_tertiary_yoy\` | 第三产业同比增速 | quarterly | yoy |
+| \`cpi_yoy\` | CPI同比 | monthly | yoy |
+| \`cpi_mom\` | CPI环比 | monthly | mom |
+| \`ppi_yoy\` | PPI同比 | monthly | yoy |
+| \`pmi_mfg\` | 制造业PMI | monthly | index |
+| \`pmi_non_mfg\` | 非制造业PMI | monthly | index |
+| \`unemployment_rate\` | 城镇调查失业率 | monthly | index |
+| \`m2_yoy\` | M2同比增速 | monthly | yoy |
+| \`m2_level\` | M2余额 | monthly | level |
+| \`social_finance_new\` | 社融新增（当月） | monthly | flow |
+| \`social_finance_yoy\` | 社融存量同比 | monthly | yoy |
+| \`new_loans\` | 新增人民币贷款 | monthly | flow |
+| \`export_yoy\` | 出口金额同比 | monthly | yoy |
+| \`import_yoy\` | 进口金额同比 | monthly | yoy |
+| \`industrial_yoy\` | 工业增加值同比 | monthly | yoy |
+| \`retail_yoy\` | 社零总额同比 | monthly | yoy |
+| \`fai_yoy\` | 固定资产投资同比 | monthly | yoy |
+| \`lpr_1y\` | 1年期LPR | 每次调整 | rate |
+| \`lpr_5y\` | 5年期LPR | 每次调整 | rate |
+| \`cn_bond_10y\` | 中国10年期国债收益率 | daily | rate |
+| \`us_bond_10y\` | 美国10年期国债收益率（region=US） | daily | rate |
 
 ### 2. \`sector_meta\` 板块元数据
 
@@ -608,9 +623,12 @@ CREATE TABLE indicator_values (
   value         NUMERIC,
   revision_seq  INT DEFAULT 0,
   collected_at  TIMESTAMPTZ DEFAULT now(),
-  PRIMARY KEY (indicator_id, trade_date, revision_seq)
+  region        CHAR(2) NOT NULL DEFAULT 'CN',  -- ISO 3166-1 alpha-2，与 indicator_meta.region 一致
+  PRIMARY KEY (indicator_id, trade_date, revision_seq, region)  -- v5 新增 region 到主键
 );
 \`\`\`
+
+> **v5 设计说明**：\`region\` 字段纳入主键，支持同一 \`indicator_id\`（如 \`cpi_yoy\`）存储多个国家的数据（CN/US/EU 等），查询时通过 \`WHERE region = 'CN'\` 过滤。
 
 ### 6. \`sector_daily\` 板块日度行情
 
