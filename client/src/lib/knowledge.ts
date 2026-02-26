@@ -1,5 +1,5 @@
 // 每次修改 INITIAL_DOCS 时，递增此版本号，触发自动更新
-const DOCS_VERSION = 7;
+const DOCS_VERSION = 8;
 const VERSION_KEY = 'stock_knowledge_version';
 
 export interface KnowledgeDoc {
@@ -27,11 +27,11 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
     {
     id: 'data-collection-v3',
     category: 'requirement',
-    title: '数据采集需求文档 v3（完整修订版）',
-    tags: ['数据采集', 'AKShare', '宏观指标', '板块', '个股', '新闻', '免费公开数据', 'Supabase', 'value_type', 'frequency'],
+    title: '数据采集需求文档 v4（板块接口重构版）',
+    tags: ['数据采集', 'AKShare', 'Tushare', '宏观指标', '板块', '通达信', '东方财富', '个股', '新闻', 'Supabase', 'sector_daily', 'value_type'],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    content: `# 数据采集需求文档 v3（AKShare 公开版 · 完整修订）
+    content: `# 数据采集需求文档 v4（AKShare 公开版 · 板块接口重构）
 
 本文档是数据采集的**唯一权威参考**，开发角色 AI 在编写采集脚本时必须严格遵循本文档中的接口名称、字段名、indicator_id 命名和数据库映射关系，不得自行推断。
 
@@ -189,17 +189,142 @@ ALTER TABLE indicator_meta ADD COLUMN value_type TEXT;
 
 ## 5. 板块数据采集
 
-**目标表**：\`sector_meta\`、\`sector_stock_map\`
+**目标表**：\`sector_meta\`、\`sector_stock_map\`、\`sector_daily\`（新增）
 
-| 采集内容 | Tushare 接口 | 参数 | 采集频率 |
+本项目采用 **Tushare 打板专题数据**，覆盖通达信（TDX）和东方财富（DC）两套板块体系，放弃旧版申万行业 + \`concept\` 接口方案。
+
+### 5.1 数据库表结构
+
+**\`sector_meta\`（板块元数据，需新增字段）**
+
+\`\`\`sql
+CREATE TABLE sector_meta (
+  id            TEXT PRIMARY KEY,        -- 内部 ID，格式：{source}_{ts_code}，如 TDX_880728
+  ts_code       TEXT NOT NULL,           -- Tushare 原始代码，如 880728.TDX / BK1184.DC
+  source        TEXT NOT NULL,           -- 数据来源：'TDX' | 'DC'
+  name          TEXT NOT NULL,           -- 板块名称
+  idx_type      TEXT,                    -- 板块类型（TDX 专有）：'概念板块' | '行业板块' | '风格板块' | '地区板块'
+  created_at    TIMESTAMPTZ DEFAULT now()
+);
+\`\`\`
+
+**\`sector_stock_map\`（板块-个股映射）**
+
+\`\`\`sql
+CREATE TABLE sector_stock_map (
+  sector_id      TEXT REFERENCES sector_meta(id),
+  stock_code     TEXT NOT NULL,          -- 个股代码，如 000001.SZ
+  stock_name     TEXT,                   -- 个股名称
+  trade_date     DATE NOT NULL,          -- 成分股有效日期（区间末日期约定）
+  PRIMARY KEY (sector_id, stock_code, trade_date)
+);
+\`\`\`
+
+**\`sector_daily\`（板块日度行情，新增表）**
+
+\`\`\`sql
+CREATE TABLE sector_daily (
+  sector_id       TEXT REFERENCES sector_meta(id),
+  trade_date      DATE NOT NULL,
+  pct_change      FLOAT,                 -- 涨跌幅（%）
+  turnover_rate   FLOAT,                 -- 换手率（%）
+  up_num          INT,                   -- 上涨家数
+  down_num        INT,                   -- 下跌家数
+  limit_up_num    INT,                   -- 涨停家数（TDX 专有）
+  limit_down_num  INT,                   -- 跌停家数（TDX 专有）
+  total_mv        FLOAT,                 -- 总市值（亿元）
+  float_mv        FLOAT,                 -- 流通市值（亿元）
+  pe              FLOAT,                 -- 市盈率（TDX 专有）
+  pb              FLOAT,                 -- 市净率（TDX 专有）
+  bm_net          FLOAT,                 -- 主力净额（元，TDX 专有）
+  bm_ratio        FLOAT,                 -- 主力占比（%，TDX 专有）
+  leading         TEXT,                  -- 领涨股名称（DC 专有）
+  leading_code    TEXT,                  -- 领涨股代码（DC 专有）
+  leading_pct     FLOAT,                 -- 领涨股涨跌幅（%，DC 专有）
+  PRIMARY KEY (sector_id, trade_date)
+);
+\`\`\`
+
+### 5.2 通达信板块（TDX）采集方案
+
+通达信板块体系最为完整，包含概念、行业、风格、地区四类，且提供主力资金数据，**优先级 P0**。
+
+| 采集内容 | Tushare 接口 | 关键参数 | 目标表 | 采集频率 |
+|:---|:---|:---|:---|:---|
+| 板块元数据（全量） | \`tdx_index\` | \`trade_date=<当日>\` | \`sector_meta\` | 每日（更新名称和类型）|
+| 板块成分股 | \`tdx_member\` | \`trade_date=<当日>\` | \`sector_stock_map\` | 每日（成分股变动频繁）|
+| 板块日度行情 | \`tdx_daily\` | \`trade_date=<当日>\` | \`sector_daily\` | 每日（收盘后 17:30）|
+
+**\`tdx_index\` 输出字段映射**
+
+| Tushare 字段 | 数据库字段 | 说明 |
+|:---|:---|:---|
+| \`ts_code\` | \`ts_code\` | 板块代码，如 \`880728.TDX\` |
+| \`name\` | \`name\` | 板块名称 |
+| \`idx_type\` | \`idx_type\` | 板块类型 |
+| — | \`source\` | 固定值 \`'TDX'\` |
+| — | \`id\` | 生成规则：\`'TDX_' + ts_code.split('.')[0]\` |
+
+**\`tdx_daily\` 输出字段映射（写入 \`sector_daily\`）**
+
+| Tushare 字段 | 数据库字段 | 说明 |
+|:---|:---|:---|
+| \`ts_code\` | \`sector_id\`（转换） | 通过 \`sector_meta\` 查找对应 \`id\` |
+| \`trade_date\` | \`trade_date\` | 格式 YYYYMMDD → DATE |
+| \`pct_change\` | \`pct_change\` | 涨跌幅（%）|
+| \`turnover_rate\` | \`turnover_rate\` | 换手率（%）|
+| \`up_num\` | \`up_num\` | 上涨家数 |
+| \`down_num\` | \`down_num\` | 下跌家数 |
+| \`limit_up_num\` | \`limit_up_num\` | 涨停家数 |
+| \`limit_down_num\` | \`limit_down_num\` | 跌停家数 |
+| \`float_mv\` | \`float_mv\` | 流通市值（亿）|
+| \`ab_total_mv\` | \`total_mv\` | 总市值（亿）|
+| \`pe\` | \`pe\` | 市盈率 |
+| \`pb\` | \`pb\` | 市净率 |
+| \`bm_net\` | \`bm_net\` | 主力净额（元）|
+| \`bm_ratio\` | \`bm_ratio\` | 主力占比（%）|
+
+> **权限要求**：\`tdx_index\`、\`tdx_member\`、\`tdx_daily\` 均需 **6000 积分**。
+
+### 5.3 东方财富概念板块（DC）采集方案
+
+东方财富概念板块更新及时，提供领涨股信息，**优先级 P1**。
+
+| 采集内容 | Tushare 接口 | 关键参数 | 目标表 | 采集频率 |
+|:---|:---|:---|:---|:---|
+| 概念板块元数据 + 日度行情 | \`dc_index\` | \`trade_date=<当日>\` | \`sector_meta\` + \`sector_daily\` | 每日（收盘后 17:30）|
+| 概念板块成分股 | \`dc_member\` | \`ts_code=<板块代码>\` | \`sector_stock_map\` | 每日 |
+
+**\`dc_index\` 输出字段映射**
+
+| Tushare 字段 | 目标表 | 数据库字段 | 说明 |
 |:---|:---|:---|:---|
-| 申万一级行业列表 | \`index_classify\` | \`level='L1', src='SW2021'\` | 每月 1 次 |
-| 申万行业成分股 | \`index_member\` | \`index_code=<申万行业代码>\` | 每月 1 次 |
-| 沪深 300 成分股 | \`index_weight\` | \`index_code='399300.SZ'\` | 每月 1 次 |
-| 概念板块列表 | \`concept\` | — | 每月 1 次 |
-| 概念板块成分股 | \`concept_detail\` | \`id=<概念 ID>\` | 每月 1 次 |
+| \`ts_code\` | \`sector_meta\` | \`ts_code\` | 板块代码，如 \`BK1184.DC\` |
+| \`name\` | \`sector_meta\` | \`name\` | 概念名称 |
+| — | \`sector_meta\` | \`source\` | 固定值 \`'DC'\` |
+| — | \`sector_meta\` | \`idx_type\` | 固定值 \`'概念板块'\` |
+| \`pct_change\` | \`sector_daily\` | \`pct_change\` | 涨跌幅（%）|
+| \`turnover_rate\` | \`sector_daily\` | \`turnover_rate\` | 换手率（%）|
+| \`up_num\` | \`sector_daily\` | \`up_num\` | 上涨家数 |
+| \`down_num\` | \`sector_daily\` | \`down_num\` | 下跌家数 |
+| \`total_mv\` | \`sector_daily\` | \`total_mv\` | 总市值（万元 → 亿元，除以 10000）|
+| \`leading\` | \`sector_daily\` | \`leading\` | 领涨股名称 |
+| \`leading_code\` | \`sector_daily\` | \`leading_code\` | 领涨股代码 |
+| \`leading_pct\` | \`sector_daily\` | \`leading_pct\` | 领涨股涨跌幅（%）|
+
+> **开发注意**：\`dc_index\` 单次最多返回 5000 条，每个交易日约有 450-500 个概念板块，单次请求即可获取全量。\`total_mv\` 单位为**万元**，写入数据库时需除以 10000 转换为亿元。
+
+### 5.4 采集优先级汇总
+
+| 优先级 | 采集内容 | 接口 | 说明 |
+|:---|:---|:---|:---|
+| **P0** | 通达信板块元数据 + 成分股 + 日度行情 | \`tdx_index\` + \`tdx_member\` + \`tdx_daily\` | 字段最全，含主力资金，是板块轮动分析的核心数据 |
+| **P1** | 东方财富概念板块 + 成分股 | \`dc_index\` + \`dc_member\` | 概念更新及时，领涨股信息有价值 |
+
+> **旧版接口废弃说明**：v3 文档中的 \`index_classify\`（申万行业）、\`concept\`（概念板块）、\`index_member\`、\`concept_detail\` 接口已废弃，统一替换为打板专题接口。
 
 ---
+
 
 ## 6. 个股数据采集
 
