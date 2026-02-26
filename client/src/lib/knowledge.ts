@@ -459,16 +459,234 @@ Tushare API          indicator_values        analyze_macro          宏观看板
   {
     id: 'data-model-v1',
     category: 'data_model',
-    title: '数据库 Schema 设计 v4（已建表确认版）',
-    tags: ['Supabase', 'PostgreSQL', 'Schema', '时序数据', '数据版本控制', 'RLS'],
+    title: '数据库 Schema 设计 v4.1（含 region 字段）',
+    tags: ['Supabase', 'PostgreSQL', 'Schema', '时序数据', '数据版本控制', 'RLS', '多国指标'],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    content: `# 数据库 Schema 设计 v4（已建表确认版）
+    content: `# 数据库 Schema 设计 v4.1（含 region 字段）
 
 > **状态**：✅ 已在 Supabase 生产环境建表完成（2026-02-26）
+> **v4.1 变更**：indicator_meta 新增 region 字段（ISO 3166-1 alpha-2，如 CN/US/HK）
 > **Project URL**：https://ozwgqdcqtkdprvhuacjk.supabase.co
-> **建表脚本**：`create_all_tables.sql`（项目根目录）
+> **建表脚本**：\`create_all_tables.sql\`（项目根目录）
+> **变更脚本**：\`add_region_field.sql\`（项目根目录）
 
+## 核心设计原则
+
+1. **窄表存储原始数据**：所有时序数据使用窄表结构，便于扩展新指标，不覆盖，只追加。
+2. **时间序列三要素**：宏观指标表包含 \`trade_date\` (业务时间)、\`publish_date\` (发布时间)、\`collected_at\` (采集时间) 三个时间字段，以避免回测中的未来数据泄露。
+3. **数据版本控制**：对可能被修订的数据（如宏观指标），通过 \`revision_seq\` 字段进行版本管理，查询时取最大版本号。
+4. **关系有效期**：对会变化的映射关系（如板块成分股），通过 \`in_date\` 和 \`out_date\` 字段管理有效期，\`is_current\` 标记当前成分。
+5. **RLS 权限控制**：所有表启用行级安全（RLS），所有人可读，service_role 可写。
+6. **多国架构**：\`indicator_meta\` 使用 ISO 3166-1 alpha-2 \`region\` 字段区分国家/地区，数据源可为 WEO、世界银行、各国统计局，缺失数据留空。
+
+---
+
+## 表总览（8张表）
+
+| 表名 | 字段数 | 分类 | 说明 |
+|:---|:---:|:---|:---|
+| \`indicator_meta\` | 12 | 基础层 | 宏观指标元数据（含 region 字段，14条 CN 种子数据） |
+| \`indicator_values\` | 6 | 数据层 | 宏观指标时序数据 |
+| \`sector_meta\` | 7 | 基础层 | 板块元数据（TDX+DC双体系） |
+| \`sector_stock_map\` | 5 | 基础层 | 板块-股票多对多映射 |
+| \`sector_daily\` | 15 | 数据层 | 板块日度行情 |
+| \`stock_meta\` | 11 | 基础层 | 个股基础信息 |
+| \`stock_daily\` | 17 | 数据层 | 个股日度行情+估值 |
+| \`news\` | 10 | 信息层 | 新闻舆情 |
+
+---
+
+## 基础层
+
+### 1. \`indicator_meta\` 指标元数据（v4.1 含 region）
+
+\`\`\`sql
+CREATE TABLE indicator_meta (
+  id             TEXT PRIMARY KEY,
+  name_cn        TEXT NOT NULL,
+  description_cn TEXT,
+  category       TEXT NOT NULL CHECK (category IN ('macro', 'sector', 'stock')),
+  unit           TEXT,
+  source_name    TEXT,
+  source_url     TEXT,
+  credibility    TEXT CHECK (credibility IN ('high', 'medium', 'low')),
+  frequency      TEXT CHECK (frequency IN ('daily', 'weekly', 'monthly', 'quarterly', 'yearly')),
+  value_type     TEXT CHECK (value_type IN ('level', 'yoy', 'mom', 'qoq', 'flow', 'rate', 'index')),
+  region         CHAR(2) NOT NULL DEFAULT 'CN',  -- ISO 3166-1 alpha-2: CN/US/HK/TW/EU/JP/GLOBAL
+  created_at     TIMESTAMPTZ DEFAULT now()
+);
+\`\`\`
+
+**region 字段说明**：
+
+| 值 | 含义 | 典型数据源 |
+|:---|:---|:---|
+| \`CN\` | 中国大陆 | 国家统计局、人民银行、AKShare |
+| \`US\` | 美国 | BLS、美联储、AKShare |
+| \`HK\` | 香港 | 香港统计处 |
+| \`TW\` | 台湾 | 主计总处 |
+| \`EU\` | 欧元区 | Eurostat |
+| \`JP\` | 日本 | 日本统计局 |
+| \`GLOBAL\` | 全球/多国汇总 | IMF WEO、世界银行 |
+
+**已预置的 14 个 CN 宏观指标**：
+
+| ID | 名称 | 频率 | 类型 |
+|:---|:---|:---|:---|
+| \`cn_gdp_yoy\` | GDP同比增速 | quarterly | yoy |
+| \`cn_cpi_yoy\` | CPI同比增速 | monthly | yoy |
+| \`cn_ppi_yoy\` | PPI同比增速 | monthly | yoy |
+| \`cn_pmi_mfg\` | 制造业PMI | monthly | index |
+| \`cn_pmi_service\` | 非制造业PMI | monthly | index |
+| \`cn_m2_yoy\` | M2同比增速 | monthly | yoy |
+| \`cn_social_finance\` | 社会融资规模增量 | monthly | flow |
+| \`cn_new_loans\` | 新增人民币贷款 | monthly | flow |
+| \`cn_export_yoy\` | 出口金额同比 | monthly | yoy |
+| \`cn_import_yoy\` | 进口金额同比 | monthly | yoy |
+| \`cn_industrial_yoy\` | 工业增加值同比 | monthly | yoy |
+| \`cn_retail_yoy\` | 社零总额同比 | monthly | yoy |
+| \`cn_fai_yoy\` | 固定资产投资同比 | monthly | yoy |
+| \`cn_lpr_1y\` | 1年期LPR | monthly | rate |
+
+### 2. \`sector_meta\` 板块元数据
+
+\`\`\`sql
+CREATE TABLE sector_meta (
+  id           TEXT PRIMARY KEY,
+  name_cn      TEXT NOT NULL,
+  system       TEXT NOT NULL CHECK (system IN ('tdx', 'dc')),
+  level        INT  NOT NULL CHECK (level IN (1, 2, 3)),
+  parent_id    TEXT REFERENCES sector_meta(id),
+  description  TEXT,
+  created_at   TIMESTAMPTZ DEFAULT now()
+);
+\`\`\`
+
+### 3. \`stock_meta\` 个股元数据
+
+\`\`\`sql
+CREATE TABLE stock_meta (
+  ts_code       TEXT PRIMARY KEY,
+  symbol        TEXT NOT NULL,
+  name_cn       TEXT NOT NULL,
+  area          TEXT,
+  industry      TEXT,
+  market        TEXT CHECK (market IN ('主板', '创业板', '科创板', '北交所', 'B股')),
+  list_date     DATE,
+  delist_date   DATE,
+  is_active     BOOLEAN DEFAULT true,
+  created_at    TIMESTAMPTZ DEFAULT now(),
+  updated_at    TIMESTAMPTZ DEFAULT now()
+);
+\`\`\`
+
+### 4. \`sector_stock_map\` 板块-个股映射
+
+\`\`\`sql
+CREATE TABLE sector_stock_map (
+  sector_id   TEXT NOT NULL REFERENCES sector_meta(id),
+  ts_code     TEXT NOT NULL,
+  in_date     DATE,
+  out_date    DATE,
+  is_current  BOOLEAN DEFAULT true,
+  PRIMARY KEY (sector_id, ts_code)
+);
+\`\`\`
+
+---
+
+## 数据层
+
+### 5. \`indicator_values\` 宏观指标时序
+
+\`\`\`sql
+CREATE TABLE indicator_values (
+  indicator_id  TEXT NOT NULL REFERENCES indicator_meta(id),
+  trade_date    DATE NOT NULL,
+  publish_date  DATE NOT NULL,
+  value         NUMERIC,
+  revision_seq  INT DEFAULT 0,
+  collected_at  TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (indicator_id, trade_date, revision_seq)
+);
+\`\`\`
+
+### 6. \`sector_daily\` 板块日度行情
+
+\`\`\`sql
+CREATE TABLE sector_daily (
+  sector_id    TEXT NOT NULL REFERENCES sector_meta(id),
+  trade_date   DATE NOT NULL,
+  open NUMERIC, high NUMERIC, low NUMERIC, close NUMERIC,
+  pct_chg      NUMERIC,
+  volume       NUMERIC,
+  amount       NUMERIC,
+  up_count     INT,
+  down_count   INT,
+  flat_count   INT,
+  avg_pe       NUMERIC,
+  total_mv     NUMERIC,
+  collected_at TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (sector_id, trade_date)
+);
+\`\`\`
+
+### 7. \`stock_daily\` 个股日度行情+估值
+
+\`\`\`sql
+CREATE TABLE stock_daily (
+  ts_code      TEXT NOT NULL REFERENCES stock_meta(ts_code),
+  trade_date   DATE NOT NULL,
+  open NUMERIC, high NUMERIC, low NUMERIC, close NUMERIC,
+  pre_close    NUMERIC,
+  pct_chg      NUMERIC,
+  vol          NUMERIC,
+  amount       NUMERIC,
+  adj_factor   NUMERIC,
+  pe_ttm       NUMERIC,
+  pb           NUMERIC,
+  ps_ttm       NUMERIC,
+  total_mv     NUMERIC,
+  circ_mv      NUMERIC,
+  collected_at TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (ts_code, trade_date)
+);
+\`\`\`
+
+---
+
+## 信息层
+
+### 8. \`news\` 新闻舆情
+
+\`\`\`sql
+CREATE TABLE news (
+  id           BIGSERIAL PRIMARY KEY,
+  ts_code      TEXT,
+  title        TEXT NOT NULL,
+  content      TEXT,
+  pub_time     TIMESTAMPTZ NOT NULL,
+  source       TEXT,
+  url          TEXT,
+  sentiment    NUMERIC CHECK (sentiment BETWEEN -1 AND 1),
+  keywords     TEXT[],
+  collected_at TIMESTAMPTZ DEFAULT now()
+);
+\`\`\`
+
+---
+
+## 数据采集脚本规划
+
+| 脚本 | 数据源 | 目标表 | 频率 |
+|:---|:---|:---|:---|
+| \`collect_macro.py\` | AKShare / WEO / 各国统计局 | indicator_values | 每日/每月 |
+| \`collect_sector_meta.py\` | Tushare TDX/DC | sector_meta, sector_stock_map | 每周 |
+| \`collect_sector_daily.py\` | Tushare TDX/DC | sector_daily | 每日 |
+| \`collect_stock_meta.py\` | Tushare stock_basic | stock_meta | 每周 |
+| \`collect_stock_daily.py\` | Tushare daily + daily_basic | stock_daily | 每日 |
+| \`collect_news.py\` | Tushare news | news | 每小时 |
 `,
   },
   {
