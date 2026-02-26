@@ -1,5 +1,5 @@
 // 每次修改 INITIAL_DOCS 时，递增此版本号，触发自动更新
-const DOCS_VERSION = 6;
+const DOCS_VERSION = 7;
 const VERSION_KEY = 'stock_knowledge_version';
 
 export interface KnowledgeDoc {
@@ -24,216 +24,223 @@ export const CATEGORY_META: Record<KnowledgeDoc['category'], { label: string; co
 const STORAGE_KEY = 'stock_knowledge_docs';
 
 const INITIAL_DOCS: KnowledgeDoc[] = [
-  {
-    id: 'data-collection-v2',
+    {
+    id: 'data-collection-v3',
     category: 'requirement',
-    title: '数据采集需求文档 v2（AKShare 公开版）',
-    tags: ['数据采集', 'AKShare', '宏观指标', '板块', '个股', '新闻', '免费公开数据'],
+    title: '数据采集需求文档 v3（完整修订版）',
+    tags: ['数据采集', 'AKShare', '宏观指标', '板块', '个股', '新闻', '免费公开数据', 'Supabase', 'value_type', 'frequency'],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    content: `# 数据采集需求文档 v2（AKShare 公开版）
+    content: `# 数据采集需求文档 v3（AKShare 公开版 · 完整修订）
 
-本需求文档基于已确定的 **数据库 Schema v2** 和 **指标体系**，明确宏观、板块、个股、新闻四大类数据的采集范围、来源、频率和字段映射关系。
+本文档是数据采集的**唯一权威参考**，开发角色 AI 在编写采集脚本时必须严格遵循本文档中的接口名称、字段名、indicator_id 命名和数据库映射关系，不得自行推断。
 
-**核心决策**：宏观指标数据采集全部使用 **AKShare 开源 Python 库**，封装了东方财富、新浪财经、金十数据、funddb 等公开网站数据，**完全免费、无需注册、无需 API Key**。个股和板块数据仍沿用 Tushare Pro（已有 Token）。
-
----
-
-## 1. 宏观指标数据采集
-
-**目标数据表**: \`indicator_meta\`, \`indicator_values\`
-
-核心原则：\`indicator_meta\` 表一次性初始化，后续仅在新增指标时追加；\`indicator_values\` 表按频率采集，只追加不覆盖，对可能修订的数据通过 \`revision_seq\` 进行版本管理。
-
-### 1.1 宏观经济（Economy）
-
-| 指标中文名 | indicator_id | AKShare 接口 | 关键输出字段 | 数据来源 | 采集频率 |
-|:---|:---|:---|:---|:---|:---|
-| GDP 增速（同比） | gdp_yoy | \`macro_china_gdp\` | \`国内生产总值-同比增长\` | 东方财富 | 季度 |
-| CPI 同比 | cpi_yoy | \`macro_china_cpi\` | \`全国-同比增长\` | 东方财富 | 月度 |
-| PPI 同比 | ppi_yoy | \`macro_china_ppi\` | \`当月同比增长\` | 东方财富 | 月度 |
-| PMI（制造业） | pmi_mfg | \`macro_china_pmi\` | \`制造业-指数\` | 东方财富 | 月度 |
-| PMI（非制造业） | pmi_non_mfg | \`macro_china_pmi\` | \`非制造业-指数\` | 东方财富 | 月度 |
-
-> 时间字段：GDP 为 \`季度\`（格式如 2021-03-01），CPI/PPI/PMI 为 \`月份\`（格式如 2022年10月份）。
-
-### 1.2 流动性与货币政策（Liquidity）
-
-| 指标中文名 | indicator_id | AKShare 接口 | 关键输出字段 | 数据来源 | 采集频率 |
-|:---|:---|:---|:---|:---|:---|
-| M2 货币供应量同比 | m2_yoy | \`macro_china_money_supply\` | \`货币和准货币(M2)-同比增长\` | 东方财富 | 月度 |
-| 新增信贷（当月） | new_credit | \`macro_china_new_financial_credit\` | \`当月\` | 东方财富 | 月度 |
-| 1年期 LPR | lpr_1y | \`macro_china_lpr\` | \`LPR1Y\` | 东方财富 | 每次调整 |
-| 5年期 LPR | lpr_5y | \`macro_china_lpr\` | \`LPR5Y\` | 东方财富 | 每次调整 |
-| 存款准备金率（大型机构） | rrr_large | \`macro_china_reserve_requirement_ratio\` | \`大型金融机构-调整后\` | 东方财富 | 每次调整 |
-| 1周 Shibor | shibor_1w | \`macro_china_shibor_all\` | \`1W-定价\` | 金十数据 | 每日 |
-
-> 时间字段：M2/新增信贷 为 \`月份\`；LPR 为 \`TRADE_DATE\`；存准率 为 \`公布时间\`；Shibor 为 \`日期\`。
-
-### 1.3 利率与市场利差（Rate & Spread）
-
-| 指标中文名 | indicator_id | AKShare 接口 | 关键输出字段 | 数据来源 | 采集频率 |
-|:---|:---|:---|:---|:---|:---|
-| 10年期中国国债收益率 | bond_cn_10y | \`bond_zh_us_rate\` | \`中国国债收益率10年\` | 东方财富 | 每日 |
-| 10年期美国国债收益率 | bond_us_10y | \`bond_zh_us_rate\` | \`美国国债收益率10年\` | 东方财富 | 每日 |
-
-> 接口 \`bond_zh_us_rate\` 一次返回中美两国国债收益率（2年、5年、10年、30年期），时间字段为 \`日期\`。建议从 2010-01-01 开始采集（早期数据有大量 NaN）。
-
-> 股债收益率差（= 沪深300 盈利率 - 10年期国债收益率）为派生指标，由前端计算，不单独采集。
-
-### 1.4 市场资金流向（Capital Flow）
-
-| 指标中文名 | indicator_id | AKShare 接口 | 输入参数 | 关键输出字段 | 数据来源 | 采集频率 |
-|:---|:---|:---|:---|:---|:---|:---|
-| 北向资金净流入 | north_money | \`stock_hsgt_north_net_flow_in_em\` | \`symbol="北上"\` | \`value\`（单位：万元） | 东方财富 | 每日 |
-
-> 时间字段为 \`date\`。如需分拆沪股通/深股通，将 \`symbol\` 改为 \`"沪股通"\` 或 \`"深股通"\`。
-
-> **重要**：旧接口 \`stock_hsgt_hist_em\` 自 2024-08-19 起数据缺失，已弃用，改用 \`stock_hsgt_north_net_flow_in_em\`。
-
-### 1.5 市场估值与情绪（Valuation）
-
-| 指标中文名 | indicator_id | AKShare 接口 | 输入参数 | 关键输出字段 | 数据来源 | 采集频率 |
-|:---|:---|:---|:---|:---|:---|:---|
-| 沪深300 市盈率 | hs300_pe | \`index_value_hist_funddb\` | \`symbol="沪深300", indicator="市盈率"\` | \`市盈率\` | funddb（韭圈儿） | 每日 |
-| 沪深300 市净率 | hs300_pb | \`index_value_hist_funddb\` | \`symbol="沪深300", indicator="市净率"\` | \`市净率\` | funddb（韭圈儿） | 每日 |
-
-> 时间字段为 \`日期\`。输出字段名与 \`indicator\` 参数值相同（如 \`indicator="市盈率"\` 则字段名为 \`市盈率\`）。
-
-> \`symbol\` 的具体名称需先调用 \`ak.index_value_name_funddb()\` 获取列表确认（实际名称为"沪深300"）。
+**核心决策**：
+- 宏观指标：全部使用 **AKShare 开源 Python 库**（\`pip install akshare\`），封装东方财富、金十数据、国家统计局、中国货币网等公开数据，**完全免费、无需 API Key**。
+- 个股和板块：使用 **Tushare Pro**（Token 已配置在 \`.env\` 文件中）。
+- 数据库：**Supabase PostgreSQL**（凭证已配置在 \`.env\` 文件中）。
 
 ---
 
-## 2. 板块数据采集
+## 1. 时间字段设计规范（方案 B · 行业标准）
 
-**目标数据表**: \`sector_meta\`, \`sector_stock_map\`
+本项目采用与 Wind、CEIC 一致的**单日期字段 + 区间末日期约定**：
 
-核心原则：板块本身不产生时序数据，其估值、涨跌幅等指标均由成分股数据聚合计算而来。核心是维护 \`sector_stock_map\` 的准确性。
+| 频率 | \`trade_date\` 约定 | 举例 |
+|:---|:---|:---|
+| 日度 | 当天日期 | \`2024-09-30\` |
+| 月度 | 月末最后一天 | \`2024-09-30\`（代表 2024 年 9 月） |
+| 季度 | 季末最后一天 | \`2024-09-30\`（代表 2024Q3） |
+| 年度 | 年末最后一天 | \`2024-12-31\`（代表 2024 年全年） |
 
-### 2.1 板块定义（写入 sector_meta）
-
-| 板块分类 | type 值 | 接口来源 | 接口名 | 采集频率 |
-|:---|:---|:---|:---|:---|
-| 申万一级行业（31个） | \`sw_l1\` | Tushare | \`index_classify\` | 每月 |
-| 概念板块 | \`concept\` | Tushare | \`concept\` | 每月 |
-| 沪深300 | \`hs300\` | Tushare | \`index_basic\` | 每月 |
-| 中证500 | \`zz500\` | Tushare | \`index_basic\` | 每月 |
-
-### 2.2 板块成分股（写入 sector_stock_map）
-
-| 板块分类 | 接口来源 | 接口名 | 关键参数 | 采集频率 |
-|:---|:---|:---|:---|:---|
-| 申万行业/指数成分 | Tushare | \`index_member\` | \`index_code\` | 每月 |
-| 概念板块成分 | Tushare | \`concept_detail\` | \`concept_id\` | 每月 |
-
-> 成分股变更时，将旧关系的 \`expiry_date\` 置为调整日，并插入新关系记录（\`effective_date\` = 调整日）。
+> **开发注意**：\`indicator_meta\` 表中的 \`frequency\` 字段说明该指标的时间粒度，\`value_type\` 字段说明数值性质。查询时通过这两个字段还原完整时间语义，无需额外的 \`period_start\`/\`period_end\` 字段。
 
 ---
 
-## 3. 个股数据采集
+## 2. \`indicator_meta\` 表新增字段规范
 
-**目标数据表**: \`stock_meta\`, \`stock_daily\`
+在原有 Schema 基础上，\`indicator_meta\` 表需新增以下两个字段：
 
-### 3.1 个股基础信息（写入 stock_meta）
+\`\`\`sql
+ALTER TABLE indicator_meta ADD COLUMN frequency TEXT;
+-- 取值: 'daily' | 'monthly' | 'quarterly' | 'annual'
 
-| 字段 | 接口来源 | 接口名 | 字段名 | 采集频率 |
-|:---|:---|:---|:---|:---|
-| 股票代码 | Tushare | \`stock_basic\` | \`ts_code\` | 每周 |
-| 股票名称 | Tushare | \`stock_basic\` | \`name\` | 每周 |
-| 上市日期 | Tushare | \`stock_basic\` | \`list_date\` | 每周 |
-| 交易所 | Tushare | \`stock_basic\` | \`exchange\` | 每周 |
+ALTER TABLE indicator_meta ADD COLUMN value_type TEXT;
+-- 取值: 'level' | 'yoy' | 'qoq' | 'mom' | 'flow' | 'rate' | 'index'
+\`\`\`
 
-### 3.2 个股日度数据（写入 stock_daily）
+**\`value_type\` 取值说明**：
 
-| 字段 | 接口来源 | 接口名 | 字段名 | 采集频率 | 备注 |
-|:---|:---|:---|:---|:---|:---|
-| 开/收/高/低价 | Tushare | \`daily\` | \`open\`, \`close\`, \`high\`, \`low\` | 每日 | - |
-| 成交量 | Tushare | \`daily\` | \`vol\` | 每日 | 单位：手 |
-| 成交额 | Tushare | \`daily\` | \`amount\` | 每日 | 单位：千元，写入时换算为元 |
-| 市盈率 TTM | Tushare | \`daily_basic\` | \`pe_ttm\` | 每日 | - |
-| 市净率 MRQ | Tushare | \`daily_basic\` | \`pb\` | 每日 | - |
-| 总市值 | Tushare | \`daily_basic\` | \`total_mv\` | 每日 | 单位：万元，写入时换算为元 |
-
----
-
-## 4. 新闻数据采集
-
-**目标数据表**: \`news\`
-
-核心原则：采集后 \`analyzed_at\` 字段为 NULL，等待 AI 分析 Skill 进行情感分析和摘要提取。
-
-| 新闻分类 | category 值 | 接口来源 | 接口名 | 采集频率 | 关联说明 |
-|:---|:---|:---|:---|:---|:---|
-| 宏观新闻 | \`macro\` | Tushare | \`news\` | 每小时 | \`related_id\` 置空，\`source='cctv'\` |
-| 行业/个股新闻 | \`sector\` / \`stock\` | Tushare | \`news\` | 每小时 | 采集后由 AI 分析 Skill 补充 \`related_id\` |
+| value_type | 含义 | 举例 |
+|:---|:---|:---|
+| \`level\` | 绝对量（存量/总量） | GDP 总量（亿元）、M2 余额（亿元）、外汇储备 |
+| \`yoy\` | 同比增速（%） | GDP 同比、CPI 同比、M2 同比 |
+| \`qoq\` | 季比增速（%，季度环比） | GDP 季比 |
+| \`mom\` | 月环比增速（%） | CPI 环比 |
+| \`flow\` | 当期增量（流量值） | 社融新增（亿元）、新增信贷 |
+| \`rate\` | 利率/收益率/汇率（%或绝对值） | LPR、Shibor、国债收益率、人民币汇率 |
+| \`index\` | 指数/综合评分（无量纲） | PMI、PE、PB、失业率 |
 
 ---
 
-## 5. 采集优先级
+## 3. 宏观指标完整采集清单
+
+### 3.1 宏观经济（Economy）
+
+**目标表**：\`indicator_meta\` + \`indicator_values\`
+
+| indicator_id | 中文名 | AKShare 接口 | 关键输出字段 | 数据来源 | frequency | value_type | 单位 |
+|:---|:---|:---|:---|:---|:---|:---|:---|
+| \`gdp_yoy\` | GDP 同比增速 | \`macro_china_gdp\` | \`季度国内生产总值-同比增长\` | 东方财富 | quarterly | yoy | % |
+| \`gdp_level\` | GDP 总量（季度） | \`macro_china_gdp\` | \`季度国内生产总值-绝对值\` | 东方财富 | quarterly | level | 亿元 |
+| \`gdp_qoq\` | GDP 季比增速 | \`macro_china_gdp\` | \`季度国内生产总值-环比增长\` | 东方财富 | quarterly | qoq | % |
+| \`gdp_primary\` | 第一产业增加值 | \`macro_china_gdp\` | \`第一产业生产总值-绝对值\` | 东方财富 | quarterly | level | 亿元 |
+| \`gdp_primary_yoy\` | 第一产业同比增速 | \`macro_china_gdp\` | \`第一产业生产总值-同比增长\` | 东方财富 | quarterly | yoy | % |
+| \`gdp_secondary\` | 第二产业增加值 | \`macro_china_gdp\` | \`第二产业生产总值-绝对值\` | 东方财富 | quarterly | level | 亿元 |
+| \`gdp_secondary_yoy\` | 第二产业同比增速 | \`macro_china_gdp\` | \`第二产业生产总值-同比增长\` | 东方财富 | quarterly | yoy | % |
+| \`gdp_tertiary\` | 第三产业增加值 | \`macro_china_gdp\` | \`第三产业生产总值-绝对值\` | 东方财富 | quarterly | level | 亿元 |
+| \`gdp_tertiary_yoy\` | 第三产业同比增速 | \`macro_china_gdp\` | \`第三产业生产总值-同比增长\` | 东方财富 | quarterly | yoy | % |
+| \`cpi_yoy\` | CPI 同比 | \`macro_china_cpi\` | \`今值\` | 东方财富 | monthly | yoy | % |
+| \`cpi_mom\` | CPI 环比 | \`macro_china_cpi_mom\` | \`今值\` | 东方财富 | monthly | mom | % |
+| \`ppi_yoy\` | PPI 同比 | \`macro_china_ppi\` | \`今值\` | 东方财富 | monthly | yoy | % |
+| \`pmi_mfg\` | PMI 制造业 | \`macro_china_pmi\` | \`制造业-今值\` | 东方财富 | monthly | index | 无量纲 |
+| \`pmi_non_mfg\` | PMI 非制造业 | \`macro_china_pmi\` | \`非制造业-今值\` | 东方财富 | monthly | index | 无量纲 |
+| \`unemployment_rate\` | 城镇调查失业率 | \`macro_china_urban_unemployment\` | \`数据\` | 国家统计局 | monthly | index | % |
+
+> **开发注意**：\`macro_china_gdp\` 接口一次返回所有字段，需从同一 DataFrame 中提取多列分别写入不同 \`indicator_id\`。\`trade_date\` 由接口返回的季度字符串（如 \`2024年三季度\`）转换为季末日期（\`2024-09-30\`）。
+
+### 3.2 流动性与货币政策（Liquidity）
+
+| indicator_id | 中文名 | AKShare 接口 | 关键输出字段 | 数据来源 | frequency | value_type | 单位 |
+|:---|:---|:---|:---|:---|:---|:---|:---|
+| \`m2_yoy\` | M2 货币供应量同比 | \`macro_china_money_supply\` | \`货币和准货币(M2)-同比增长\` | 东方财富 | monthly | yoy | % |
+| \`m2_level\` | M2 余额 | \`macro_china_money_supply\` | \`货币和准货币(M2)-数量\` | 东方财富 | monthly | level | 亿元 |
+| \`social_finance_new\` | 社融新增（当月） | \`macro_china_new_financial_credit\` | \`当月\` | 东方财富 | monthly | flow | 亿元 |
+| \`social_finance_yoy\` | 社融存量同比 | \`macro_china_new_financial_credit\` | \`同比增速\` | 东方财富 | monthly | yoy | % |
+| \`lpr_1y\` | LPR 1 年期 | \`macro_china_lpr\` | \`LPR1Y\` | 东方财富 | 每次调整 | rate | % |
+| \`lpr_5y\` | LPR 5 年期 | \`macro_china_lpr\` | \`LPR5Y\` | 东方财富 | 每次调整 | rate | % |
+| \`shibor_on\` | Shibor 隔夜 | \`macro_china_shibor_all\` | \`O/N-定价\` | 金十数据 | daily | rate | % |
+| \`shibor_1w\` | Shibor 1 周 | \`macro_china_shibor_all\` | \`1W-定价\` | 金十数据 | daily | rate | % |
+| \`dr001\` | DR001 银行间隔夜回购 | \`macro_china_shibor_all\` | \`O/N-定价\`（注：DR001 暂用 Shibor O/N 近似，官网直采见备注） | 金十数据 | daily | rate | % |
+| \`dr007\` | DR007 银行间 7 天回购 | \`macro_china_shibor_all\` | \`1W-定价\`（注：DR007 暂用 Shibor 1W 近似，官网直采见备注） | 金十数据 | daily | rate | % |
+
+> **DR001/DR007 备注**：AKShare 目前无独立的 DR001/DR007 接口。精确数据来源为**中国货币网**（\`https://www.chinamoney.com.cn/chinese/bkfrr/\`），该页面提供 FR001/FR007（银行间回购定盘利率）历史数据，可通过 HTTP 请求直采。采集脚本应优先尝试直采中国货币网，失败时回退到 Shibor 近似值。\`trade_date\` 约定为当天日期。
+
+> **LPR 备注**：LPR 不是每日发布，每次调整时才有新数据。\`trade_date\` 使用 \`TRADE_DATE\` 字段原始值（格式 \`YYYYMMDD\`），转换为 \`DATE\` 类型写入。
+
+### 3.3 利率与汇率（Rates & FX）
+
+| indicator_id | 中文名 | AKShare 接口 | 关键输出字段 | 数据来源 | frequency | value_type | 单位 |
+|:---|:---|:---|:---|:---|:---|:---|:---|
+| \`cn_bond_10y\` | 中国 10 年期国债收益率 | \`bond_zh_us_rate\` | \`中国国债收益率10年\` | 东方财富 | daily | rate | % |
+| \`us_bond_10y\` | 美国 10 年期国债收益率 | \`bond_zh_us_rate\` | \`美国国债收益率10年\` | 东方财富 | daily | rate | % |
+| \`rmb_usd\` | 人民币兑美元中间价 | 直采中国货币网 | 美元/人民币中间价 | 中国外汇交易中心 | daily | rate | 元/美元 |
+
+> **人民币汇率备注**：AKShare 的 \`macro_china_rmb\` 接口数据仅到 2021-05，**不可用**。正确数据源为**中国外汇交易中心（中国货币网）**官网（\`https://www.chinamoney.com.cn/chinese/bkccpr/\`），每日 9:15 发布人民币汇率中间价。采集脚本需直接请求该网站的 API 接口（\`https://www.chinamoney.com.cn/ags/ms/cm-u-bk-ccpr/CcprHisNew\`）获取历史数据。\`trade_date\` 使用公告日期。
+
+### 3.4 资金流向（Fund Flow）
+
+| indicator_id | 中文名 | AKShare 接口 | 关键输出字段 | 数据来源 | frequency | value_type | 单位 |
+|:---|:---|:---|:---|:---|:---|:---|:---|
+| \`north_net_flow\` | 北向资金净流入 | \`stock_hsgt_north_net_flow_in_em\` | \`value\`（\`symbol="北上"\`） | 东方财富 | daily | flow | 万元 |
+| \`margin_balance_sh\` | 上海融资余额 | \`macro_china_market_margin_sh\` | \`融资余额\` | 金十数据 | daily | level | 元 |
+| \`margin_balance_sz\` | 深圳融资余额 | \`macro_china_market_margin_sz\` | \`融资余额\` | 金十数据 | daily | level | 元 |
+
+> **融资余额备注**：沪深两市分别采集后，前端展示时合并为全市场融资余额（\`margin_balance_sh + margin_balance_sz\`），合并逻辑在前端计算，不单独存储合并值。注意单位不一致：上海接口单位为**元（int64）**，深圳接口单位为**元（float64）**，写入数据库时统一转换为**亿元**（除以 1e8）。
+
+### 3.5 市场估值（Valuation）
+
+| indicator_id | 中文名 | AKShare 接口 | 参数 | 关键输出字段 | 数据来源 | frequency | value_type | 单位 |
+|:---|:---|:---|:---|:---|:---|:---|:---|:---|
+| \`hs300_pe\` | 沪深 300 PE（加权 TTM） | \`stock_a_pe_and_pb\` | \`symbol="000300.SH"\` | \`addTtmPe\` | 乐咕乐股 | daily | index | 倍 |
+| \`hs300_pb\` | 沪深 300 PB（加权） | \`stock_a_pe_and_pb\` | \`symbol="000300.SH"\` | \`addPb\` | 乐咕乐股 | daily | index | 倍 |
+| \`all_a_pe\` | 全 A 市场 PE（等权 TTM 中位数） | \`stock_a_pe_and_pb\` | \`symbol="sh"\`（上证）+ \`symbol="sz"\`（深证）合并 | \`middleAddTtmPe\` | 乐咕乐股 | daily | index | 倍 |
+| \`all_a_pb\` | 全 A 市场 PB（等权中位数） | \`stock_a_pe_and_pb\` | \`symbol="sh"\` + \`symbol="sz"\` 合并 | \`middleAveragePb\` | 乐咕乐股 | daily | index | 倍 |
+
+> **全 A PE/PB 备注**：\`stock_a_pe_and_pb\` 接口的 \`symbol\` 参数支持 \`sh\`（上证 A 股）和 \`sz\`（深证 A 股），分别采集后取等权中位数的均值作为全 A 近似值。\`trade_date\` 使用 \`date\` 字段原始值（格式 \`YYYY-MM-DD\`）。
+
+---
+
+## 4. 前端指标 ID 与数据库 indicator_id 对照表
+
+前端 \`indicators.ts\` 中的 \`id\` 字段与数据库 \`indicator_id\` 的映射关系如下。**开发前端数据查询逻辑时，必须使用此表中的 \`indicator_id\` 进行数据库查询**。
+
+| 前端 \`id\` | 前端展示名 | 数据库 \`indicator_id\`（主要） | 备注 |
+|:---|:---|:---|:---|
+| \`gdp\` | GDP 增速 | \`gdp_yoy\`, \`gdp_level\`, \`gdp_qoq\` | 前端展示时可切换同比/绝对值/季比 |
+| \`cpi\` | CPI | \`cpi_yoy\`, \`cpi_mom\` | 前端默认展示同比 |
+| \`ppi\` | PPI | \`ppi_yoy\` | — |
+| \`pmi\` | PMI | \`pmi_mfg\`, \`pmi_non_mfg\` | 前端展示两条线 |
+| \`unemployment\` | 失业率 | \`unemployment_rate\` | — |
+| \`m2\` | M2 货币供应量 | \`m2_yoy\`, \`m2_level\` | 前端可切换同比/余额 |
+| \`socialfinance\` | 社融数据 | \`social_finance_new\`, \`social_finance_yoy\` | — |
+| \`lpr\` | LPR | \`lpr_1y\`, \`lpr_5y\` | 前端展示两条线 |
+| \`bondyield\` | 国债收益率 | \`cn_bond_10y\`, \`us_bond_10y\` | 前端展示中美两条线 |
+| \`dr\` | 银行间流动性 | \`dr001\`, \`dr007\` | 前端展示两条线 |
+| \`exchange\` | 人民币汇率 | \`rmb_usd\` | — |
+| \`northbound\` | 北向资金净流入 | \`north_net_flow\` | — |
+| \`pe300\` | 沪深 300 PE | \`hs300_pe\` | — |
+| \`allpe\` | 全 A PE/PB | \`all_a_pe\`, \`all_a_pb\` | — |
+| \`stockbond\` | 股债收益率差 | 派生指标 | 前端计算：\`1/hs300_pe * 100 - cn_bond_10y\` |
+| \`margin\` | 融资余额 | \`margin_balance_sh\`, \`margin_balance_sz\` | 前端合并展示 |
+| \`marginratio\` | 两融余额占流通市值比 | 派生指标 | 前端计算：\`(margin_balance_sh + margin_balance_sz) / 全A总市值\` |
+
+---
+
+## 5. 板块数据采集
+
+**目标表**：\`sector_meta\`、\`sector_stock_map\`
+
+| 采集内容 | Tushare 接口 | 参数 | 采集频率 |
+|:---|:---|:---|:---|
+| 申万一级行业列表 | \`index_classify\` | \`level='L1', src='SW2021'\` | 每月 1 次 |
+| 申万行业成分股 | \`index_member\` | \`index_code=<申万行业代码>\` | 每月 1 次 |
+| 沪深 300 成分股 | \`index_weight\` | \`index_code='399300.SZ'\` | 每月 1 次 |
+| 概念板块列表 | \`concept\` | — | 每月 1 次 |
+| 概念板块成分股 | \`concept_detail\` | \`id=<概念 ID>\` | 每月 1 次 |
+
+---
+
+## 6. 个股数据采集
+
+**目标表**：\`stock_meta\`、\`stock_daily\`
+
+| 采集内容 | Tushare 接口 | 关键字段 | 采集频率 |
+|:---|:---|:---|:---|
+| 股票基础信息 | \`stock_basic\` | \`ts_code\`, \`name\`, \`list_date\`, \`exchange\` | 每周 1 次 |
+| 日度行情 | \`daily\` | \`ts_code\`, \`trade_date\`, \`open\`, \`close\`, \`high\`, \`low\`, \`vol\`, \`amount\` | 每日（收盘后） |
+| 日度估值指标 | \`daily_basic\` | \`ts_code\`, \`trade_date\`, \`pe_ttm\`, \`pb\`, \`total_mv\` | 每日（收盘后） |
+
+> **开发注意**：\`daily\` 和 \`daily_basic\` 需按 \`(ts_code, trade_date)\` JOIN 后写入 \`stock_daily\` 表。\`vol\` 字段单位为手（100 股），\`amount\` 单位为千元，写入数据库时统一转换为股和元。
+
+---
+
+## 7. 新闻数据采集
+
+**目标表**：\`news\`
+
+| 采集内容 | AKShare 接口 | 关键字段 | 采集频率 |
+|:---|:---|:---|:---|
+| 财经新闻（宏观） | \`stock_news_em\` | \`title\`, \`content\`, \`publish_time\` | 每小时 |
+| 个股公告 | \`stock_notice_report\` | \`ts_code\`, \`title\`, \`content\`, \`ann_date\` | 每日 |
+
+---
+
+## 8. 采集优先级
 
 | 优先级 | 数据类型 | 原因 |
 |:---|:---|:---|
-| P0（立即） | 个股日度数据（stock_daily） | 是板块估值聚合计算的基础 |
-| P0（立即） | 个股基础信息（stock_meta） | 是所有关联的前提 |
-| P0（立即） | 板块成分股（sector_stock_map） | 是板块分析的核心 |
-| P1（本周） | 宏观指标（indicator_values） | 宏观分析的数据源，使用 AKShare 免费采集 |
-| P1（本周） | 板块定义（sector_meta） | 支撑板块分析 |
-| P2（下周） | 新闻数据（news） | 依赖 AI 分析 Skill |
+| P0 | 个股日度行情（\`stock_daily\`）、板块成分股（\`sector_stock_map\`） | 所有分析的基础数据，缺失则前端无法展示 |
+| P1 | 宏观指标（GDP/CPI/PPI/PMI/M2/社融/LPR/国债/北向/PE/PB） | 宏观分析核心数据 |
+| P2 | 新闻数据（\`news\`）、汇率（\`rmb_usd\`）、DR001/DR007 | 辅助分析，暂时缺失不影响核心功能 |
 
 ---
 
-## 6. AKShare 安装与使用示例
-
-\`\`\`bash
-pip install akshare
-\`\`\`
-
-\`\`\`python
-import akshare as ak
-
-# 1. 宏观经济
-gdp_df  = ak.macro_china_gdp()                    # 字段: 季度, 国内生产总值-同比增长
-cpi_df  = ak.macro_china_cpi()                    # 字段: 月份, 全国-同比增长
-ppi_df  = ak.macro_china_ppi()                    # 字段: 月份, 当月同比增长
-pmi_df  = ak.macro_china_pmi()                    # 字段: 月份, 制造业-指数, 非制造业-指数
-
-# 2. 流动性与货币政策
-m2_df   = ak.macro_china_money_supply()            # 字段: 月份, 货币和准货币(M2)-同比增长
-cr_df   = ak.macro_china_new_financial_credit()    # 字段: 月份, 当月（单位: 亿元）
-lpr_df  = ak.macro_china_lpr()                    # 字段: TRADE_DATE, LPR1Y, LPR5Y
-rrr_df  = ak.macro_china_reserve_requirement_ratio()  # 字段: 公布时间, 大型金融机构-调整后
-sh_df   = ak.macro_china_shibor_all()              # 字段: 日期, 1W-定价
-
-# 3. 利率与市场利差
-bond_df = ak.bond_zh_us_rate(start_date="20100101")  # 字段: 日期, 中国国债收益率10年, 美国国债收益率10年
-
-# 4. 市场资金流向
-north_df = ak.stock_hsgt_north_net_flow_in_em(symbol="北上")  # 字段: date, value（万元）
-
-# 5. 市场估值
-pe_df   = ak.index_value_hist_funddb(symbol="沪深300", indicator="市盈率")  # 字段: 日期, 市盈率
-pb_df   = ak.index_value_hist_funddb(symbol="沪深300", indicator="市净率")  # 字段: 日期, 市净率
-\`\`\`
-
----
-
-## 7. 注意事项与风险提示
-
-| 风险项 | 说明 |
-|:---|:---|
-| 接口限频 | AKShare 数据来源为公开网站，频繁请求可能被限频，建议采集时加入 \`time.sleep()\` 和重试机制 |
-| 接口变更 | 公开网站页面结构可能变更导致接口失效，建议定期验证接口可用性 |
-| 字段名动态 | \`index_value_hist_funddb\` 输出字段名与 \`indicator\` 参数值相同，如 \`indicator="市盈率"\` 则字段名为 \`市盈率\` |
-| 人民币汇率 | \`macro_china_rmb\` 数据仅到 2021-05，暂不采集，候选替代方案：\`currency_boc_sina\`（中国银行汇率） |
-| 历史起始时间 | \`bond_zh_us_rate\` 中国国债数据从 1990-12 开始，但早期数据有大量 NaN，建议从 2010-01-01 开始采集 |
-
----
-
-## 8. 环境变量配置
+## 9. 环境变量配置
 
 数据采集脚本运行时，所有凭证通过环境变量注入，**实际值存储在项目根目录的 \`.env\` 文件中，已加入 \`.gitignore\`，禁止提交到 Git**。
 
-### 8.1 凭证清单
+### 9.1 凭证清单
 
 | 变量名 | 用途 | 权限级别 | 使用方 |
 |:---|:---|:---|:---|
@@ -242,34 +249,46 @@ pb_df   = ak.index_value_hist_funddb(symbol="沪深300", indicator="市净率") 
 | \`SUPABASE_ANON_KEY\` | 匿名公开密钥，受 RLS 策略限制 | 低敏感 | 前端 React |
 | \`TUSHARE_TOKEN\` | Tushare Pro 接口调用凭证 | 中等敏感 | 仅后端/采集脚本 |
 
-> AKShare 无需任何 API Key，安装后直接使用。
+> AKShare 无需任何 API Key，\`pip install akshare\` 后直接调用。
 
-### 8.2 Python 采集脚本中的使用方式
+### 9.2 Python 采集脚本中的使用方式
 
 \`\`\`python
 import os
 from supabase import create_client
 
-# 从环境变量读取凭证（不要硬编码在代码中）
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")  # 采集脚本使用 service_role
 TUSHARE_TOKEN = os.environ.get("TUSHARE_TOKEN")
 
-# 初始化 Supabase 客户端
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 初始化 Tushare
 import tushare as ts
 ts.set_token(TUSHARE_TOKEN)
 pro = ts.pro_api()
 \`\`\`
 
-### 8.3 安全规范
+### 9.3 安全规范
 
 - \`SUPABASE_SERVICE_KEY\` 拥有完整数据库权限，**只能在服务端 Python 脚本中使用**，绝对不能出现在前端代码或 Git 仓库中
 - \`SUPABASE_ANON_KEY\` 可以安全暴露在前端代码中，但依赖 Supabase RLS 行级安全策略保护数据
 - 凭证过期时间：Service Key 和 Anon Key 的 JWT 过期时间为 **2084-09-26**（约 60 年），无需定期轮换
-- Tushare Token 无过期时间，但如发生泄露需立即在 Tushare 控制台重置
+- Tushare Token 无过期时间，如发生泄露需立即在 Tushare 控制台重置
+
+---
+
+## 10. 注意事项与风险提示
+
+| 风险项 | 说明 |
+|:---|:---|
+| 接口限频 | AKShare 数据来源为公开网站，频繁请求可能被限频，采集脚本必须加入 \`time.sleep(1)\` 和指数退避重试机制 |
+| 接口变更 | 公开网站页面结构可能变更导致接口失效，建议每月验证接口可用性 |
+| DR001/DR007 | AKShare 无独立接口，需直采中国货币网（\`chinamoney.com.cn\`），失败时回退到 Shibor 近似值 |
+| 人民币汇率 | \`macro_china_rmb\` 数据仅到 2021-05，必须直采中国货币网官方 API |
+| 国债历史数据 | \`bond_zh_us_rate\` 中国国债数据从 1990-12 开始，早期数据有大量 NaN，建议从 2010-01-01 开始采集 |
+| 融资余额单位 | 上海接口单位为元（int64），深圳接口单位为元（float64），写入数据库统一转换为亿元 |
+| GDP 日期转换 | \`macro_china_gdp\` 返回的时间格式为 \`2024年三季度\`，需转换为季末日期 \`2024-09-30\` |
+| LPR 频率 | LPR 不是每日发布，仅在调整时才有新数据，采集脚本需做幂等处理（相同 \`trade_date\` 不重复写入） |
 `
   },
   {
