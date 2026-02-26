@@ -1,5 +1,5 @@
 // 每次修改 INITIAL_DOCS 时，递增此版本号，触发自动更新
-const DOCS_VERSION = 8;
+const DOCS_VERSION = 9;
 const VERSION_KEY = 'stock_knowledge_version';
 
 export interface KnowledgeDoc {
@@ -459,11 +459,11 @@ Tushare API          indicator_values        analyze_macro          宏观看板
   {
     id: 'data-model-v1',
     category: 'data_model',
-    title: '数据库 Schema 设计 v2',
+    title: '数据库 Schema 设计 v3',
     tags: ['Supabase', 'PostgreSQL', 'Schema', '时序数据', '数据版本控制'],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    content: `# 数据库 Schema 设计 v2
+    content: `# 数据库 Schema 设计 v3
 
 ## 核心设计原则
 
@@ -580,9 +580,92 @@ CREATE TABLE stock_daily (
 
 ---
 
+
+### 7. \`sector_daily\` 板块日度行情
+
+存储通达信（TDX）和东方财富（DC）两套板块体系的每日行情数据。两套体系共用同一张表，通过 \`sector_id\` 前缀区分（\`TDX_\` 前缀为通达信，\`DC_\` 前缀为东方财富）。
+
+**数据来源**：
+- 通达信板块行情：Tushare Pro \`tdx_daily\` 接口（需 6000 积分）
+- 东方财富概念行情：Tushare Pro \`dc_index\` 接口（需 2000 积分）
+
+\`\`\`sql
+CREATE TABLE sector_daily (
+  sector_id       TEXT NOT NULL REFERENCES sector_meta(id),
+  trade_date      DATE NOT NULL,
+
+  -- 行情基础字段（通达信 + 东方财富 共有）
+  pct_change      NUMERIC,           -- 涨跌幅 (%)
+  up_num          INT,               -- 上涨家数
+  down_num        INT,               -- 下跌家数
+  turnover_rate   NUMERIC,           -- 换手率 (%)
+  total_mv        NUMERIC,           -- 总市值（亿元，写入时统一转换）
+  float_mv        NUMERIC,           -- 流通市值（亿元）
+
+  -- 通达信专有字段（sector_id 以 'TDX_' 开头时有值，否则为 NULL）
+  pe              NUMERIC,           -- 市盈率（整体法）
+  pb              NUMERIC,           -- 市净率（整体法）
+  limit_up_num    INT,               -- 涨停家数
+  limit_down_num  INT,               -- 跌停家数
+  bm_net          NUMERIC,           -- 主力净流入额（亿元）
+  bm_ratio        NUMERIC,           -- 主力净流入占比 (%)
+
+  -- 东方财富专有字段（sector_id 以 'DC_' 开头时有值，否则为 NULL）
+  leading         TEXT,              -- 领涨股名称
+  leading_code    TEXT,              -- 领涨股代码（如 '600036.SH'）
+  leading_pct     NUMERIC,           -- 领涨股涨跌幅 (%)
+
+  -- 系统字段
+  collected_at    TIMESTAMPTZ DEFAULT now(),
+
+  PRIMARY KEY (sector_id, trade_date)
+);
+\`\`\`
+
+**字段补充说明**：
+
+| 字段 | 来源接口 | Tushare 原始字段名 | 单位转换说明 |
+|:---|:---|:---|:---|
+| \`pct_change\` | tdx_daily / dc_index | \`pct_change\` | 无需转换，直接写入 |
+| \`up_num\` | tdx_daily / dc_index | \`up_num\` | 无需转换 |
+| \`down_num\` | tdx_daily / dc_index | \`down_num\` | 无需转换 |
+| \`turnover_rate\` | tdx_daily / dc_index | \`turnover_rate\` | 无需转换 |
+| \`total_mv\` | tdx_daily / dc_index | \`total_mv\` | **万元 → 亿元，除以 10000** |
+| \`float_mv\` | tdx_daily | \`float_mv\` | **万元 → 亿元，除以 10000** |
+| \`pe\` | tdx_daily | \`pe\` | 无需转换 |
+| \`pb\` | tdx_daily | \`pb\` | 无需转换 |
+| \`limit_up_num\` | tdx_daily | \`limit_up_num\` | 无需转换 |
+| \`limit_down_num\` | tdx_daily | \`limit_down_num\` | 无需转换 |
+| \`bm_net\` | tdx_daily | \`bm_net\` | **万元 → 亿元，除以 10000** |
+| \`bm_ratio\` | tdx_daily | \`bm_ratio\` | 无需转换，已为百分比 |
+| \`leading\` | dc_index | \`leading\` | 无需转换 |
+| \`leading_code\` | dc_index | \`leading_code\` | 无需转换 |
+| \`leading_pct\` | dc_index | \`leading_pct\` | 无需转换 |
+
+**推荐索引**：
+
+\`\`\`sql
+-- 按日期查询所有板块行情（看板首页加载）
+CREATE INDEX idx_sector_daily_date ON sector_daily (trade_date DESC);
+
+-- 按板块查询历史行情（板块详情页）
+CREATE INDEX idx_sector_daily_sector ON sector_daily (sector_id, trade_date DESC);
+
+-- 按主力净流入排序（资金流向看板）
+CREATE INDEX idx_sector_daily_bm_net ON sector_daily (trade_date DESC, bm_net DESC NULLS LAST);
+\`\`\`
+
+**开发注意事项**：
+
+1. **NULL 值约定**：通达信专有字段（\`pe\`、\`pb\`、\`limit_up_num\` 等）在东方财富板块行中为 \`NULL\`，东方财富专有字段（\`leading\`、\`leading_code\`、\`leading_pct\`）在通达信板块行中为 \`NULL\`。前端展示时需做 \`null\` 判断。
+2. **sector_id 生成规则**：\`'TDX_' + ts_code.split('.')[0]\`（如 \`TDX_880728\`）或 \`'DC_' + ts_code.split('.')[0]\`（如 \`DC_308570\`）。
+3. **历史数据回填**：\`tdx_daily\` 接口支持按日期范围查询，建议首次采集时回填近 3 年数据（约 750 个交易日）。
+4. **与 sector_meta 的关联**：写入 \`sector_daily\` 前必须确保对应的 \`sector_id\` 已存在于 \`sector_meta\` 表中，否则外键约束报错。
+
+---
 ## 信息层（非结构化）
 
-### 7. \`news\` 新闻数据
+### 8. \`news\` 新闻数据
 
 存储宏观、行业、个股新闻，并为 AI 情感分析预留字段。\`analyzed_at IS NULL\` 即为 AI 分析 Skill 的待处理队列。
 
@@ -609,7 +692,7 @@ CREATE TABLE news (
 
 ## 分析层（AI 输出）
 
-### 8. \`timing_signals\` 择时信号
+### 9. \`timing_signals\` 择时信号
 
 存储 AI 分析后生成的择时信号，覆盖宏观、板块、个股三个层面。
 
@@ -640,6 +723,7 @@ indicator_meta ← sector_meta ← stock_meta
 【数据层】
 indicator_meta → indicator_values  (宏观时序)
 stock_meta     → stock_daily       (个股日度)
+sector_meta    → sector_daily      (板块日度行情，TDX+DC 共用)
 
 【信息层】
 news (category + related_id 关联到对应实体)
