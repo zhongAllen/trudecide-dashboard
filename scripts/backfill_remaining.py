@@ -157,6 +157,44 @@ def collect_m2_level():
     print(f"  ✅ m2_level: {len(rows)} 条 -> 写入 {cnt}")
     return {"m2_level": (len(rows), cnt)}
 
+def collect_social_finance():
+    """社融增量（商务部数据，单位：亿元）"""
+    import ssl
+    print("采集 social_finance ...")
+
+    class TLSAdapter(requests.adapters.HTTPAdapter):
+        def init_poolmanager(self, *args, **kwargs):
+            ctx = ssl.create_default_context()
+            ctx.set_ciphers('DEFAULT@SECLEVEL=1')
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            kwargs['ssl_context'] = ctx
+            return super().init_poolmanager(*args, **kwargs)
+
+    sess = requests.Session()
+    sess.mount("https://", TLSAdapter())
+    url = "https://data.mofcom.gov.cn/datamofcom/front/gnmy/shrzgmQuery"
+    r = sess.post(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+    raw = r.json()
+    rows = []
+    for item in raw:
+        date_str = str(item["date"])
+        trade_date = f"{date_str[:4]}-{date_str[4:6]}-01"
+        value = float(item["tiosfs"]) if item.get("tiosfs") is not None else None
+        if value is None:
+            continue
+        rows.append({
+            "indicator_id": "social_finance",
+            "trade_date": trade_date,
+            "publish_date": trade_date,
+            "value": value,
+            "revision_seq": 0,
+            "region": "CN"
+        })
+    cnt = upsert_rows(rows)
+    print(f"  ✅ social_finance: {len(rows)} 条 -> 写入 {cnt}")
+    return {"social_finance": (len(rows), cnt)}
+
 def collect_social_finance_yoy():
     """社融存量同比（当月同比增长）"""
     print("采集 social_finance_yoy ...")
@@ -369,6 +407,7 @@ if __name__ == "__main__":
     # 按耗时从短到长
     all_results.update(collect_cpi_mom())
     all_results.update(collect_m2_level())
+    all_results.update(collect_social_finance())
     all_results.update(collect_social_finance_yoy())
     all_results.update(collect_lpr_5y())
     all_results.update(collect_gdp_extended())
