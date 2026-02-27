@@ -46,13 +46,18 @@ export default function Home() {
                 一份完整的股票投资分析指南，涵盖宏观经济、行业板块和个股分析的所有关键指标
               </p>
             </div>
-            {/* 右上角知识库入口 */}
-            <Link href="/knowledge">
-              <button className="flex items-center gap-2 bg-white/15 hover:bg-white/25 border border-white/30 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium mt-1">
-                <BookOpen className="w-4 h-4" />
-                项目知识库
-              </button>
-            </Link>
+            {/* 右上角：版本号 + 知识库入口 */}
+            <div className="flex flex-col items-end gap-2 mt-1">
+              <span className="text-xs text-blue-200/70 font-mono tracking-wider">
+                v{__APP_VERSION__}
+              </span>
+              <Link href="/knowledge">
+                <button className="flex items-center gap-2 bg-white/15 hover:bg-white/25 border border-white/30 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
+                  <BookOpen className="w-4 h-4" />
+                  项目知识库
+                </button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>

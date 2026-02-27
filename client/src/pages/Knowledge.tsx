@@ -17,6 +17,8 @@ import {
 
 export default function Knowledge() {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [editTitle, setEditTitle] = useState('');
@@ -32,7 +34,12 @@ export default function Knowledge() {
   const selectedId = params.id ?? null;
 
   useEffect(() => {
-    setDocs(loadDocs());
+    setLoading(true);
+    setError(null);
+    loadDocs()
+      .then(setDocs)
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
   }, []);
 
   // 当 URL 中的 id 变化时，退出编辑模式
@@ -73,7 +80,7 @@ export default function Knowledge() {
 
   const cancelEdit = () => setEditing(false);
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!selectedDoc) return;
     const updated: KnowledgeDoc = {
       ...selectedDoc,
@@ -84,24 +91,23 @@ export default function Knowledge() {
         .map((t) => t.trim())
         .filter(Boolean),
     };
-    const newDocs = saveDoc(updated);
-    setDocs(newDocs);
+    await saveDoc(updated);
+    setDocs((prev) => prev.map((d) => d.id === updated.id ? updated : d));
     setEditing(false);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('确认删除这篇文档？')) return;
-    const newDocs = deleteDoc(id);
-    setDocs(newDocs);
+    await deleteDoc(id);
+    setDocs((prev) => prev.filter((d) => d.id !== id));
     if (selectedId === id) goToIndex();
   };
 
-  const handleNewDoc = (category: KnowledgeDoc['category']) => {
+  const handleNewDoc = async (category: KnowledgeDoc['category']) => {
     const title = prompt('请输入文档标题：');
     if (!title) return;
-    const doc = createDoc(category, title);
-    const newDocs = saveDoc(doc);
-    setDocs(newDocs);
+    const doc = await createDoc(category, title);
+    setDocs((prev) => [doc, ...prev]);
     setShowNewDocMenu(false);
     // 导航到新文档页面并立即进入编辑模式
     navigate(`/knowledge/${doc.id}`);
@@ -147,6 +153,18 @@ export default function Knowledge() {
   const pageTitle = selectedDoc
     ? `${selectedDoc.title} | 项目知识库`
     : '项目知识库目录 | 股票分析策略看板';
+
+  if (loading) return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-muted-foreground text-sm">正在加载知识库...</div>
+    </div>
+  );
+
+  if (error) return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-destructive text-sm">加载失败：{error}</div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
