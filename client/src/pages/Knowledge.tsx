@@ -217,7 +217,7 @@ export default function Knowledge() {
     '核心原则：确定性逻辑不用AI；AI输入必须是已存储数据；展示层只读数据库',
     `知识库共${docs.length}篇文档 | ${docSummary}`,
     '使用说明：开始任务前优先阅读相关分类文档，每篇文档有独立URL /knowledge/:id 可直接访问',
-    '【AI行为规范-每次任务必须遵守】① 需求规范：每次需求讨论结束后将关联需求写入requirements表（REQ编号递增，status=open/in_progress/done/closed）② Commit规范：每次git commit必须带REQ编号，格式：feat(REQ-020): 描述 ③ 源数据原则：写入数据库时源数据是什么格式就存什么格式，禁止单位换算 ④ 完成需求时同步填写resolved_at/resolved_by/solution_note/code_refs字段 ⑤ 数据库文档同步原则：任何DDL变更（建表/加字段/改约束/改RLS）都必须立刻更新data-model文档并递增版本号，与需求写入同等优先级',
+    '【AI行为规范-每次任务必须遵守】① 需求规范：每次需求讨论结束后将关联需求写入requirements表（REQ编号递增，status=open/in_progress/done/closed）② Commit规范：每次git commit必须带REQ编号，格式：feat(REQ-020): 描述 ③ 源数据原则：写入数据库时源数据是什么格式就存什么格式，禁止单位换算 ④ 完成需求时同步填写resolved_at/resolved_by/solution_note/code_refs字段 ⑤ 数据库文档同步原则：任何DDL变更（建表/加字段/改约束/改RLS）都必须立刻更新data-model文档并递增版本号，与需求写入同等优先级 ⑥【第一性原则级】indicator_id命名规范：indicator_id禁止使用地区前缀（如tw_、cn_、us_），地区信息展由region字段承载。正确：cpi_yoy(region=TW)，错误：tw_cpi_yoy。这是设计范式的第一性原则，违反此规则的历史数据必须迁移修正',
   ].join(' || ');
 
   // 当前文档的 meta 标题（用于 SEO 和 AI 读取）
