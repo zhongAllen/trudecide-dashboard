@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Link } from 'wouter';
+import { Link, useLocation, useParams } from 'wouter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ArrowLeft, Plus, Pencil, Trash2, Save, X, BookOpen, Search, Tag } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Save, X, BookOpen, Search, Tag, Link2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   KnowledgeDoc,
@@ -18,7 +17,6 @@ import {
 
 export default function Knowledge() {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [editTitle, setEditTitle] = useState('');
@@ -26,10 +24,21 @@ export default function Knowledge() {
   const [filterCategory, setFilterCategory] = useState<KnowledgeDoc['category'] | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewDocMenu, setShowNewDocMenu] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // 从 URL 参数读取当前文档 ID（支持 /knowledge/:id 路由）
+  const params = useParams<{ id?: string }>();
+  const [, navigate] = useLocation();
+  const selectedId = params.id ?? null;
 
   useEffect(() => {
     setDocs(loadDocs());
   }, []);
+
+  // 当 URL 中的 id 变化时，退出编辑模式
+  useEffect(() => {
+    setEditing(false);
+  }, [selectedId]);
 
   const selectedDoc = docs.find((d) => d.id === selectedId) ?? null;
 
@@ -43,6 +52,16 @@ export default function Knowledge() {
       d.tags.some((t) => t.toLowerCase().includes(q));
     return matchCat && matchSearch;
   });
+
+  // 点击文档时更新 URL
+  const selectDoc = useCallback((id: string) => {
+    navigate(`/knowledge/${id}`);
+  }, [navigate]);
+
+  // 返回目录
+  const goToIndex = useCallback(() => {
+    navigate('/knowledge');
+  }, [navigate]);
 
   const startEdit = useCallback(() => {
     if (!selectedDoc) return;
@@ -74,7 +93,7 @@ export default function Knowledge() {
     if (!confirm('确认删除这篇文档？')) return;
     const newDocs = deleteDoc(id);
     setDocs(newDocs);
-    if (selectedId === id) setSelectedId(null);
+    if (selectedId === id) goToIndex();
   };
 
   const handleNewDoc = (category: KnowledgeDoc['category']) => {
@@ -83,14 +102,24 @@ export default function Knowledge() {
     const doc = createDoc(category, title);
     const newDocs = saveDoc(doc);
     setDocs(newDocs);
-    setSelectedId(doc.id);
     setShowNewDocMenu(false);
-    // 立即进入编辑模式
+    // 导航到新文档页面并立即进入编辑模式
+    navigate(`/knowledge/${doc.id}`);
     setEditTitle(doc.title);
     setEditContent(doc.content);
     setEditTags('');
     setEditing(true);
   };
+
+  // 复制文档链接到剪贴板
+  const copyDocLink = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/knowledge/${id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  }, []);
 
   const categories = Object.entries(CATEGORY_META) as [
     KnowledgeDoc['category'],
@@ -111,18 +140,32 @@ export default function Knowledge() {
     '技术栈：React+Vite+TypeScript+TailwindCSS / Express.js / Supabase / Tushare',
     '核心原则：确定性逻辑不用AI；AI输入必须是已存储数据；展示层只读数据库',
     `知识库共${docs.length}篇文档 | ${docSummary}`,
-    '使用说明：开始任务前优先阅读相关分类文档，点击左侧文档卡片查看完整内容',
+    '使用说明：开始任务前优先阅读相关分类文档，每篇文档有独立URL /knowledge/:id 可直接访问',
   ].join(' || ');
+
+  // 当前文档的 meta 标题（用于 SEO 和 AI 读取）
+  const pageTitle = selectedDoc
+    ? `${selectedDoc.title} | 项目知识库`
+    : '项目知识库目录 | 股票分析策略看板';
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Helmet>
-        <title>项目知识库目录 | 股票分析策略看板</title>
-        <meta name="description" content={`股票分析策略看板项目知识库，共${docs.length}篇文档，分为需求文档、数据模型、AI边界、决策日志、Skills目录、踩坑记录六个分类。`} />
+        <title>{pageTitle}</title>
+        <meta
+          name="description"
+          content={
+            selectedDoc
+              ? `${selectedDoc.title}（${CATEGORY_META[selectedDoc.category].label}）- 股票分析策略看板项目知识库`
+              : `股票分析策略看板项目知识库，共${docs.length}篇文档，分为需求文档、数据模型、AI边界、决策日志、Skills目录、踩坑记录六个分类。`
+          }
+        />
         <meta name="ai-context" content={aiContext} />
-        <meta name="ai-doc-index" content={docs.map(d => `[${CATEGORY_META[d.category].label}] ${d.title} (标签: ${d.tags.join(',')})`).join(' | ')} />
+        <meta name="ai-doc-index" content={docs.map(d => `[${CATEGORY_META[d.category].label}] ${d.title} (标签: ${d.tags.join(',')}) URL: /knowledge/${d.id}`).join(' | ')} />
         <meta name="last-updated" content={docs.length > 0 ? new Date(Math.max(...docs.map(d => new Date(d.updatedAt).getTime()))).toISOString() : ''} />
+        {selectedDoc && <meta name="ai-doc-content" content={selectedDoc.content.slice(0, 500)} />}
       </Helmet>
+
       {/* Top Bar */}
       <header className="gradient-header text-white px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -134,7 +177,21 @@ export default function Knowledge() {
           </Link>
           <div className="w-px h-5 bg-blue-400 mx-1" />
           <BookOpen className="w-5 h-5" />
-          <h1 className="text-xl font-bold">项目知识库</h1>
+          {/* 面包屑导航 */}
+          {selectedDoc ? (
+            <div className="flex items-center gap-2 text-sm">
+              <button
+                onClick={goToIndex}
+                className="text-blue-200 hover:text-white transition-colors"
+              >
+                项目知识库
+              </button>
+              <span className="text-blue-400">/</span>
+              <span className="font-medium truncate max-w-xs">{selectedDoc.title}</span>
+            </div>
+          ) : (
+            <h1 className="text-xl font-bold">项目知识库</h1>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -181,9 +238,9 @@ export default function Knowledge() {
           {/* Category Filter */}
           <div className="p-3 border-b border-border space-y-1">
             <button
-              onClick={() => setFilterCategory('all')}
+              onClick={() => { setFilterCategory('all'); goToIndex(); }}
               className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filterCategory === 'all'
+                !selectedId && filterCategory === 'all'
                   ? 'bg-primary text-primary-foreground'
                   : 'hover:bg-[#f4f6f8] text-foreground'
               }`}
@@ -196,7 +253,7 @@ export default function Knowledge() {
               return (
                 <button
                   key={key}
-                  onClick={() => setFilterCategory(key)}
+                  onClick={() => { setFilterCategory(key); goToIndex(); }}
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
                     filterCategory === key
                       ? 'bg-primary text-primary-foreground'
@@ -221,57 +278,69 @@ export default function Knowledge() {
             {filteredDocs.map((doc) => {
               const meta = CATEGORY_META[doc.category];
               return (
-                <button
+                <div
                   key={doc.id}
-                  onClick={() => {
-                    setSelectedId(doc.id);
-                    setEditing(false);
-                  }}
-                  className={`w-full text-left p-3 rounded-lg transition-colors group ${
+                  className={`relative rounded-lg transition-colors group ${
                     selectedId === doc.id
-                      ? 'bg-primary/10 border border-primary/30 text-foreground'
-                      : 'hover:bg-[#f4f6f8] border border-transparent text-foreground'
+                      ? 'bg-primary/10 border border-primary/30'
+                      : 'hover:bg-[#f4f6f8] border border-transparent'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-1">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="text-xs">{meta.icon}</span>
-                        <span
-                          className="text-xs font-medium"
-                          style={{ color: meta.color }}
-                        >
-                          {meta.label}
-                        </span>
-                      </div>
-                      <div className="font-medium text-sm truncate">{doc.title}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(doc.updatedAt).toLocaleDateString('zh-CN')}
+                  <button
+                    onClick={() => selectDoc(doc.id)}
+                    className="w-full text-left p-3 pr-8"
+                  >
+                    <div className="flex items-start gap-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-xs">{meta.icon}</span>
+                          <span
+                            className="text-xs font-medium"
+                            style={{ color: meta.color }}
+                          >
+                            {meta.label}
+                          </span>
+                        </div>
+                        <div className="font-medium text-sm truncate text-foreground">{doc.title}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {new Date(doc.updatedAt).toLocaleDateString('zh-CN')}
+                        </div>
                       </div>
                     </div>
+                    {doc.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {doc.tags.slice(0, 3).map((tag) => (
+                          <span
+                            key={tag}
+                            className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                  {/* 操作按钮（悬停显示） */}
+                  <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(doc.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all shrink-0"
+                      onClick={(e) => copyDocLink(doc.id, e)}
+                      className="p-1 rounded hover:bg-primary/10 hover:text-primary transition-all"
+                      title="复制链接"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      {copiedId === doc.id
+                        ? <Check className="w-3 h-3 text-green-500" />
+                        : <Link2 className="w-3 h-3" />
+                      }
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
+                      className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all"
+                      title="删除文档"
+                    >
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
-                  {doc.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {doc.tags.slice(0, 3).map((tag) => (
-                        <span
-                          key={tag}
-                          className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -290,7 +359,7 @@ export default function Knowledge() {
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   本知识库记录系统的需求、数据模型、AI 边界、架构决策和运维经验。
-                  文档按分类组织，支持全文搜索。AI 可通过读取本页获取项目全貌。
+                  文档按分类组织，支持全文搜索。每篇文档均有独立 URL，可直接分享。
                 </p>
                 <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
                   <span>共 <strong className="text-foreground">{docs.length}</strong> 篇文档</span>
@@ -327,12 +396,14 @@ export default function Knowledge() {
                       ) : (
                         <div className="divide-y divide-border">
                           {catDocs.map((doc, idx) => (
-                            <button
+                            <div
                               key={doc.id}
-                              onClick={() => setSelectedId(doc.id)}
-                              className="w-full text-left px-5 py-3.5 hover:bg-[#f4f6f8] transition-colors flex items-start justify-between gap-4 group"
+                              className="group flex items-start justify-between gap-4 px-5 py-3.5 hover:bg-[#f4f6f8] transition-colors"
                             >
-                              <div className="flex items-start gap-3 min-w-0">
+                              <button
+                                onClick={() => selectDoc(doc.id)}
+                                className="flex items-start gap-3 min-w-0 flex-1 text-left"
+                              >
                                 <span className="text-xs text-muted-foreground mt-0.5 shrink-0 w-5 text-right">
                                   {idx + 1}.
                                 </span>
@@ -353,11 +424,23 @@ export default function Knowledge() {
                                     </div>
                                   )}
                                 </div>
+                              </button>
+                              <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(doc.updatedAt).toLocaleDateString('zh-CN')}
+                                </span>
+                                <button
+                                  onClick={(e) => copyDocLink(doc.id, e)}
+                                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-primary/10 hover:text-primary transition-all"
+                                  title="复制文档链接"
+                                >
+                                  {copiedId === doc.id
+                                    ? <Check className="w-3.5 h-3.5 text-green-500" />
+                                    : <Link2 className="w-3.5 h-3.5" />
+                                  }
+                                </button>
                               </div>
-                              <span className="text-xs text-muted-foreground shrink-0 mt-0.5">
-                                {new Date(doc.updatedAt).toLocaleDateString('zh-CN')}
-                              </span>
-                            </button>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -374,6 +457,7 @@ export default function Knowledge() {
                   「需求文档」描述功能目标；「数据模型」定义 Supabase Schema；
                   「AI 边界」规定哪些场景允许使用 AI；「决策日志」记录架构决策及原因；
                   「Skills 目录」列出所有 MANUS Skills 的功能和触发条件；「踩坑记录」汇总已知问题和解决方案。
+                  每篇文档有独立 URL（格式：/knowledge/:id），可直接访问。
                   开始新任务前，请优先阅读相关分类的文档以获取上下文。
                 </p>
               </div>
@@ -454,6 +538,25 @@ export default function Knowledge() {
                     <span>创建于 {new Date(selectedDoc.createdAt).toLocaleDateString('zh-CN')}</span>
                     <span>·</span>
                     <span>更新于 {new Date(selectedDoc.updatedAt).toLocaleDateString('zh-CN')}</span>
+                    <span>·</span>
+                    {/* 文档独立链接 */}
+                    <button
+                      onClick={(e) => copyDocLink(selectedDoc.id, e)}
+                      className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
+                      title="复制文档链接"
+                    >
+                      {copiedId === selectedDoc.id ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-green-500" />
+                          <span className="text-green-500">已复制</span>
+                        </>
+                      ) : (
+                        <>
+                          <Link2 className="w-3.5 h-3.5" />
+                          <span>/knowledge/{selectedDoc.id}</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                   {selectedDoc.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-3">
