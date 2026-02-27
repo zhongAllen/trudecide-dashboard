@@ -1,10 +1,10 @@
 // 每次修改 INITIAL_DOCS 时，递增此版本号，触发自动更新
-const DOCS_VERSION = 12;
+const DOCS_VERSION = 13;
 const VERSION_KEY = 'stock_knowledge_version';
 
 export interface KnowledgeDoc {
   id: string;
-  category: 'requirement' | 'data_model' | 'ai_boundary' | 'decision_log' | 'skill' | 'pitfall';
+  category: 'requirement' | 'data_model' | 'ai_boundary' | 'decision_log' | 'skill' | 'pitfall' | 'etl_blueprint';
   title: string;
   content: string;
   tags: string[];
@@ -19,6 +19,7 @@ export const CATEGORY_META: Record<KnowledgeDoc['category'], { label: string; co
   decision_log: { label: '决策日志',   color: '#10b981', icon: '📝' },
   skill:        { label: 'Skills 目录', color: '#06b6d4', icon: '⚙️' },
   pitfall:      { label: '踩坑记录',   color: '#ef4444', icon: '⚠️' },
+  etl_blueprint: { label: 'ETL 蓝图',  color: '#f97316', icon: '🔄' },
 };
 
 const STORAGE_KEY = 'stock_knowledge_docs';
@@ -980,6 +981,139 @@ CREATE TABLE news (
 2. **输出契约**：明确说明写入哪张表、哪些字段
 3. **失败处理**：失败时告警，不静默失败
 4. **幂等性**：重复执行不产生重复数据
+`,
+  },
+
+  {
+    id: 'etl-blueprint-v1',
+    category: 'etl_blueprint',
+    title: 'ETL 蓝图 v1：数据目录 & 运维手册',
+    tags: ['ETL', '数据目录', 'Runbook', '脚本', '调度', '运维', 'AKShare', '宏观指标', '采集'],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    content: `# ETL 蓝图 v1：数据目录 & 运维手册
+
+本文档是 Trudecide 数据采集层的**一站式参考手册**，包含脚本清单、指标目录、调度计划和运维操作指南，供开发者和 AI 快速定位任何数据问题。
+
+---
+
+## 1. 脚本清单 (Script Inventory)
+
+| 脚本文件 | 主要职责 | 运行方式 |
+|---|---|---|
+| \`scripts/backfill_all.py\` | **首次全量回填**：采集 14 个核心宏观指标的全部历史数据 | \`python3 scripts/backfill_all.py\` |
+| \`scripts/backfill_remaining.py\` | **补充全量回填**：采集剩余 21 个宏观指标，包含各种特殊接口处理 | \`python3 scripts/backfill_remaining.py\` |
+| \`scripts/collect_macro_cn.py\` | **增量更新**：采集指定日期范围或单个指标的最新数据，用于定时任务 | \`python3 scripts/collect_macro_cn.py --start_date YYYY-MM-DD\` |
+
+---
+
+## 2. 指标目录 (Data Catalog)
+
+**总计 35 个指标，全部实现代码化采集，region = CN**
+
+### 日度指标（交易日更新）
+
+| 指标 ID | 指标名称 | 数据源接口 | 数据量 |
+|---|---|---|:---:|
+| \`us_bond_10y\` | 美国10年期国债收益率 | \`bond_zh_us_rate\` | 8800条 |
+| \`cn_bond_10y\` | 中国10年期国债收益率 | \`bond_zh_us_rate\` | 6030条 |
+| \`rmb_usd\` | 人民币兑美元中间价 | \`currency_boc_sina\` | 5467条 |
+| \`all_a_pb\` | 全A市场PB中位数 | \`stock_a_all_pb\` | 5127条 |
+| \`hs300_pb\` | 沪深300 PB | \`stock_index_pb_lg\` | 5073条 |
+| \`hs300_pe\` | 沪深300 PE | \`stock_index_pe_lg\` | 5072条 |
+| \`margin_balance_sh\` | 上海融资余额 | \`margin_sh_detail\` | 3857条 |
+| \`margin_balance_sz\` | 深圳融资余额 | \`margin_sz_detail\` | 3659条 |
+| \`dr001\` | 银行间隔夜回购（FR001替代） | \`repo_rate_hist\` | 2880条 |
+| \`dr007\` | 银行间7天回购（FR007替代） | \`repo_rate_hist\` | 2880条 |
+| \`north_net_flow\` | 北向资金净流入 | \`stock_hsgt_hist_em\` | 2264条 |
+| \`shibor_on\` | Shibor隔夜 | \`shibor_hist\` | 2228条 |
+| \`shibor_1w\` | Shibor 1周 | \`shibor_hist\` | 2228条 |
+| \`lpr_1y\` | 1年期LPR | \`loan_prime_rate\` | 1531条 |
+
+### 月度指标（每月固定日期更新）
+
+| 指标 ID | 指标名称 | 数据源接口 | 数据量 |
+|---|---|---|:---:|
+| \`export_yoy\` | 出口同比 | \`macro_china_export_yoy\` | 512条 |
+| \`import_yoy\` | 进口同比 | \`macro_china_import_yoy\` | 351条 |
+| \`cpi_yoy\` | CPI同比 | \`macro_china_cpi_yoy\` | 476条 |
+| \`cpi_mom\` | CPI环比 | \`macro_china_cpi_monthly\` | 217条 |
+| \`industrial_yoy\` | 工业增加值同比 | \`macro_china_industrial_yoy\` | 405条 |
+| \`ppi_yoy\` | PPI同比 | \`macro_china_ppi_yoy\` | 362条 |
+| \`m2_yoy\` | M2同比 | \`macro_china_m2_yoy\` | 337条 |
+| \`m2_level\` | M2余额 | \`macro_china_m2\` | 217条 |
+| \`social_finance_yoy\` | 社融存量同比 | \`macro_china_shrzgm\` | 217条 |
+| \`social_finance\` | 社融增量 | 商务部 HTTP API（TLSAdapter） | 132条 |
+| \`pmi_mfg\` | 制造业PMI | \`macro_china_pmi\` | 248条 |
+| \`pmi_non_mfg\` | 非制造业PMI | \`macro_china_pmi\` | 224条 |
+| \`retail_yoy\` | 社零同比 | \`macro_china_consumer_goods_retail\` | 188条 |
+| \`fai_yoy\` | 固投同比 | \`macro_china_fai_yoy\` | 180条 |
+| \`unemployment_rate\` | 城镇调查失业率 | 国家统计局 HTTP API | 97条 |
+| \`new_loans\` | 新增人民币贷款 | \`macro_china_new_loans\` | 30条 |
+| \`lpr_5y\` | 5年期LPR | \`loan_prime_rate\` | 79条 |
+
+### 季度指标（每季度末后约15-20天更新）
+
+| 指标 ID | 指标名称 | 数据源接口 | 数据量 |
+|---|---|---|:---:|
+| \`gdp_level\` | GDP总量（亿元） | \`macro_china_gdp_yearly\` | 80条 |
+| \`gdp_qoq\` | GDP季比 | 计算得出（从累计值反推） | 79条 |
+| \`gdp_yoy\` | GDP同比 | \`macro_china_gdp_yoy\` | 59条 |
+| \`gdp_primary_*\` | 三大产业增加值 | \`macro_china_gdp_yearly\` | 各80条 |
+
+---
+
+## 3. 调度计划 (Scheduling Plan)
+
+| 频率 | 执行时间 | 目标脚本 | 说明 |
+|:---:|---|---|---|
+| **日度** | 每个交易日 18:00 | \`collect_macro_cn.py --start_date <today>\` | 采集所有日度指标当天数据 |
+| **月度** | 每月 16 日 22:00 | \`collect_macro_cn.py --start_date <last_month>\` | 采集所有月度指标上月数据 |
+| **季度** | 每季度首月 20 日 22:00 | \`collect_macro_cn.py --start_date <last_quarter>\` | 采集所有季度指标上季度数据 |
+
+> **当前状态**：调度任务尚未配置，待产品上云后统一部署。候选方案：GitHub Actions（免费）或云服务器 Cron。
+
+---
+
+## 4. 运维手册 (Runbook)
+
+### 手动执行
+
+\`\`\`bash
+# 全量回填（初始化时使用）
+python3 scripts/backfill_all.py
+python3 scripts/backfill_remaining.py
+
+# 增量补跑（补跑指定日期后的所有指标）
+python3 scripts/collect_macro_cn.py --start_date 2026-02-01
+
+# 只跑单个指标
+python3 scripts/collect_macro_cn.py --indicator cpi_yoy
+\`\`\`
+
+### 数据验证 SQL
+
+\`\`\`sql
+-- 查看每个指标的最新数据日期和条数
+SELECT indicator_id, region, COUNT(*) as cnt, MAX(trade_date) as latest
+FROM indicator_values
+GROUP BY indicator_id, region
+ORDER BY latest DESC;
+\`\`\`
+
+### 常见问题排查
+
+**问题 1：AKShare 报 SSL 错误**
+- 原因：目标数据源服务器 TLS 版本过低（详见「踩坑记录」文档）
+- 解决：检查脚本中是否已使用 \`TLSAdapter\` 或 \`verify=False\`；对金十数据等不稳定源，可多次重跑
+
+**问题 2：Supabase 写入报 RLS 错误**
+- 原因：\`indicator_values\` 表 RLS 策略要求 \`service_role\` 权限，upsert 需要 \`UPDATE\` 权限
+- 解决：确认脚本使用的是 \`service_role\` key；检查 RLS 策略是否允许 \`ALL\` 操作
+
+**问题 3：数据条数异常（比预期少）**
+- 原因：部分接口按月分批请求，SSL 偶发失败会跳过某些月份
+- 解决：查询 \`indicator_values\` 中该指标的日期连续性，找到缺失月份后手动补跑
 `,
   },
 ];
