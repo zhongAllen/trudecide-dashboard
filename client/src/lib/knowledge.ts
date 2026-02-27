@@ -1,5 +1,5 @@
 // 每次修改 INITIAL_DOCS 时，递增此版本号，触发自动更新
-const DOCS_VERSION = 13;
+const DOCS_VERSION = 14;
 const VERSION_KEY = 'stock_knowledge_version';
 
 export interface KnowledgeDoc {
@@ -98,77 +98,4 @@ const INITIAL_DOCS: KnowledgeDoc[] = [
     tags: ['ETL', '数据目录', 'Runbook', '脚本', '调度', '运维', 'AKShare', '宏观指标', '采集'],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    content: "# ETL \u84dd\u56fe v1\uff1a\u6570\u636e\u76ee\u5f55 & \u8fd0\u7ef4\u624b\u518c\n\n\u672c\u6587\u6863\u662f Trudecide \u6570\u636e\u91c7\u96c6\u5c42\u7684**\u4e00\u7ad9\u5f0f\u53c2\u8003\u624b\u518c**\uff0c\u5305\u542b\u811a\u672c\u6e05\u5355\u3001\u6307\u6807\u76ee\u5f55\u3001\u8c03\u5ea6\u8ba1\u5212\u548c\u8fd0\u7ef4\u64cd\u4f5c\u6307\u5357\uff0c\u4f9b\u5f00\u53d1\u8005\u548c AI \u5feb\u901f\u5b9a\u4f4d\u4efb\u4f55\u6570\u636e\u95ee\u9898\u3002\n\n---\n\n## 1. \u811a\u672c\u6e05\u5355 (Script Inventory)\n\n| \u811a\u672c\u6587\u4ef6 | \u4e3b\u8981\u804c\u8d23 | \u8fd0\u884c\u65b9\u5f0f |\n|---|---|---|\n| \\`scripts/backfill_all.py\\` | **\u9996\u6b21\u5168\u91cf\u56de\u586b**\uff1a\u91c7\u96c6 14 \u4e2a\u6838\u5fc3\u5b8f\u89c2\u6307\u6807\u7684\u5168\u90e8\u5386\u53f2\u6570\u636e | \\`python3 scripts/backfill_all.py\\` |\n| \\`scripts/backfill_remaining.py\\` | **\u8865\u5145\u5168\u91cf\u56de\u586b**\uff1a\u91c7\u96c6\u5269\u4f59 21 \u4e2a\u5b8f\u89c2\u6307\u6807\uff0c\u5305\u542b\u5404\u79cd\u7279\u6b8a\u63a5\u53e3\u5904\u7406 | \\`python3 scripts/backfill_remaining.py\\` |\n| \\`scripts/collect_macro_cn.py\\` | **\u589e\u91cf\u66f4\u65b0**\uff1a\u91c7\u96c6\u6307\u5b9a\u65e5\u671f\u8303\u56f4\u6216\u5355\u4e2a\u6307\u6807\u7684\u6700\u65b0\u6570\u636e\uff0c\u7528\u4e8e\u5b9a\u65f6\u4efb\u52a1 | \\`python3 scripts/collect_macro_cn.py --start_date YYYY-MM-DD\\` |\n\n---\n\n## 2. \u6307\u6807\u76ee\u5f55 (Data Catalog)\n\n**\u603b\u8ba1 35 \u4e2a\u6307\u6807\uff0c\u5168\u90e8\u5b9e\u73b0\u4ee3\u7801\u5316\u91c7\u96c6\uff0cregion = CN**\n\n### \u65e5\u5ea6\u6307\u6807\uff08\u4ea4\u6613\u65e5\u66f4\u65b0\uff09\n\n| \u6307\u6807 ID | \u6307\u6807\u540d\u79f0 | \u6570\u636e\u6e90\u63a5\u53e3 | \u6570\u636e\u91cf |\n|---|---|---|:---:|\n| \\`us_bond_10y\\` | \u7f8e\u56fd10\u5e74\u671f\u56fd\u503a\u6536\u76ca\u7387 | \\`bond_zh_us_rate\\` | 8800\u6761 |\n| \\`cn_bond_10y\\` | \u4e2d\u56fd10\u5e74\u671f\u56fd\u503a\u6536\u76ca\u7387 | \\`bond_zh_us_rate\\` | 6030\u6761 |\n| \\`rmb_usd\\` | \u4eba\u6c11\u5e01\u5151\u7f8e\u5143\u4e2d\u95f4\u4ef7 | \\`currency_boc_sina\\` | 5467\u6761 |\n| \\`all_a_pb\\` | \u5168A\u5e02\u573aPB\u4e2d\u4f4d\u6570 | \\`stock_a_all_pb\\` | 5127\u6761 |\n| \\`hs300_pb\\` | \u6caa\u6df1300 PB | \\`stock_index_pb_lg\\` | 5073\u6761 |\n| \\`hs300_pe\\` | \u6caa\u6df1300 PE | \\`stock_index_pe_lg\\` | 5072\u6761 |\n| \\`margin_balance_sh\\` | \u4e0a\u6d77\u878d\u8d44\u4f59\u989d | \\`margin_sh_detail\\` | 3857\u6761 |\n| \\`margin_balance_sz\\` | \u6df1\u5733\u878d\u8d44\u4f59\u989d | \\`margin_sz_detail\\` | 3659\u6761 |\n| \\`dr001\\` | \u94f6\u884c\u95f4\u9694\u591c\u56de\u8d2d\uff08FR001\u66ff\u4ee3\uff09 | \\`repo_rate_hist\\` | 2880\u6761 |\n| \\`dr007\\` | \u94f6\u884c\u95f47\u5929\u56de\u8d2d\uff08FR007\u66ff\u4ee3\uff09 | \\`repo_rate_hist\\` | 2880\u6761 |\n| \\`north_net_flow\\` | \u5317\u5411\u8d44\u91d1\u51c0\u6d41\u5165 | \\`stock_hsgt_hist_em\\` | 2264\u6761 |\n| \\`shibor_on\\` | Shibor\u9694\u591c | \\`shibor_hist\\` | 2228\u6761 |\n| \\`shibor_1w\\` | Shibor 1\u5468 | \\`shibor_hist\\` | 2228\u6761 |\n| \\`lpr_1y\\` | 1\u5e74\u671fLPR | \\`loan_prime_rate\\` | 1531\u6761 |\n\n### \u6708\u5ea6\u6307\u6807\uff08\u6bcf\u6708\u56fa\u5b9a\u65e5\u671f\u66f4\u65b0\uff09\n\n| \u6307\u6807 ID | \u6307\u6807\u540d\u79f0 | \u6570\u636e\u6e90\u63a5\u53e3 | \u6570\u636e\u91cf |\n|---|---|---|:---:|\n| \\`export_yoy\\` | \u51fa\u53e3\u540c\u6bd4 | \\`macro_china_export_yoy\\` | 512\u6761 |\n| \\`import_yoy\\` | \u8fdb\u53e3\u540c\u6bd4 | \\`macro_china_import_yoy\\` | 351\u6761 |\n| \\`cpi_yoy\\` | CPI\u540c\u6bd4 | \\`macro_china_cpi_yoy\\` | 476\u6761 |\n| \\`cpi_mom\\` | CPI\u73af\u6bd4 | \\`macro_china_cpi_monthly\\` | 217\u6761 |\n| \\`industrial_yoy\\` | \u5de5\u4e1a\u589e\u52a0\u503c\u540c\u6bd4 | \\`macro_china_industrial_yoy\\` | 405\u6761 |\n| \\`ppi_yoy\\` | PPI\u540c\u6bd4 | \\`macro_china_ppi_yoy\\` | 362\u6761 |\n| \\`m2_yoy\\` | M2\u540c\u6bd4 | \\`macro_china_m2_yoy\\` | 337\u6761 |\n| \\`m2_level\\` | M2\u4f59\u989d | \\`macro_china_m2\\` | 217\u6761 |\n| \\`social_finance_yoy\\` | \u793e\u878d\u5b58\u91cf\u540c\u6bd4 | \\`macro_china_shrzgm\\` | 217\u6761 |\n| \\`social_finance\\` | \u793e\u878d\u589e\u91cf | \u5546\u52a1\u90e8 HTTP API\uff08TLSAdapter\uff09 | 132\u6761 |\n| \\`pmi_mfg\\` | \u5236\u9020\u4e1aPMI | \\`macro_china_pmi\\` | 248\u6761 |\n| \\`pmi_non_mfg\\` | \u975e\u5236\u9020\u4e1aPMI | \\`macro_china_pmi\\` | 224\u6761 |\n| \\`retail_yoy\\` | \u793e\u96f6\u540c\u6bd4 | \\`macro_china_consumer_goods_retail\\` | 188\u6761 |\n| \\`fai_yoy\\` | \u56fa\u6295\u540c\u6bd4 | \\`macro_china_fai_yoy\\` | 180\u6761 |\n| \\`unemployment_rate\\` | \u57ce\u9547\u8c03\u67e5\u5931\u4e1a\u7387 | \u56fd\u5bb6\u7edf\u8ba1\u5c40 HTTP API | 97\u6761 |\n| \\`new_loans\\` | \u65b0\u589e\u4eba\u6c11\u5e01\u8d37\u6b3e | \\`macro_china_new_loans\\` | 30\u6761 |\n| \\`lpr_5y\\` | 5\u5e74\u671fLPR | \\`loan_prime_rate\\` | 79\u6761 |\n\n### \u5b63\u5ea6\u6307\u6807\uff08\u6bcf\u5b63\u5ea6\u672b\u540e\u7ea615-20\u5929\u66f4\u65b0\uff09\n\n| \u6307\u6807 ID | \u6307\u6807\u540d\u79f0 | \u6570\u636e\u6e90\u63a5\u53e3 | \u6570\u636e\u91cf |\n|---|---|---|:---:|\n| \\`gdp_level\\` | GDP\u603b\u91cf\uff08\u4ebf\u5143\uff09 | \\`macro_china_gdp_yearly\\` | 80\u6761 |\n| \\`gdp_qoq\\` | GDP\u5b63\u6bd4 | \u8ba1\u7b97\u5f97\u51fa\uff08\u4ece\u7d2f\u8ba1\u503c\u53cd\u63a8\uff09 | 79\u6761 |\n| \\`gdp_yoy\\` | GDP\u540c\u6bd4 | \\`macro_china_gdp_yoy\\` | 59\u6761 |\n| \\`gdp_primary_*\\` | \u4e09\u5927\u4ea7\u4e1a\u589e\u52a0\u503c | \\`macro_china_gdp_yearly\\` | \u540480\u6761 |\n\n---\n\n## 3. \u8c03\u5ea6\u8ba1\u5212 (Scheduling Plan)\n\n| \u9891\u7387 | \u6267\u884c\u65f6\u95f4 | \u76ee\u6807\u811a\u672c | \u8bf4\u660e |\n|:---:|---|---|---|\n| **\u65e5\u5ea6** | \u6bcf\u4e2a\u4ea4\u6613\u65e5 18:00 | \\`collect_macro_cn.py --start_date <today>\\` | \u91c7\u96c6\u6240\u6709\u65e5\u5ea6\u6307\u6807\u5f53\u5929\u6570\u636e |\n| **\u6708\u5ea6** | \u6bcf\u6708 16 \u65e5 22:00 | \\`collect_macro_cn.py --start_date <last_month>\\` | \u91c7\u96c6\u6240\u6709\u6708\u5ea6\u6307\u6807\u4e0a\u6708\u6570\u636e |\n| **\u5b63\u5ea6** | \u6bcf\u5b63\u5ea6\u9996\u6708 20 \u65e5 22:00 | \\`collect_macro_cn.py --start_date <last_quarter>\\` | \u91c7\u96c6\u6240\u6709\u5b63\u5ea6\u6307\u6807\u4e0a\u5b63\u5ea6\u6570\u636e |\n\n> **\u5f53\u524d\u72b6\u6001**\uff1a\u8c03\u5ea6\u4efb\u52a1\u5c1a\u672a\u914d\u7f6e\uff0c\u5f85\u4ea7\u54c1\u4e0a\u4e91\u540e\u7edf\u4e00\u90e8\u7f72\u3002\u5019\u9009\u65b9\u6848\uff1aGitHub Actions\uff08\u514d\u8d39\uff09\u6216\u4e91\u670d\u52a1\u5668 Cron\u3002\n\n---\n\n## 4. \u8fd0\u7ef4\u624b\u518c (Runbook)\n\n### \u624b\u52a8\u6267\u884c\n\n\\`\\`\\`bash\n# \u5168\u91cf\u56de\u586b\uff08\u521d\u59cb\u5316\u65f6\u4f7f\u7528\uff09\npython3 scripts/backfill_all.py\npython3 scripts/backfill_remaining.py\n\n# \u589e\u91cf\u8865\u8dd1\uff08\u8865\u8dd1\u6307\u5b9a\u65e5\u671f\u540e\u7684\u6240\u6709\u6307\u6807\uff09\npython3 scripts/collect_macro_cn.py --start_date 2026-02-01\n\n# \u53ea\u8dd1\u5355\u4e2a\u6307\u6807\npython3 scripts/collect_macro_cn.py --indicator cpi_yoy\n\\`\\`\\`\n\n### \u6570\u636e\u9a8c\u8bc1 SQL\n\n\\`\\`\\`sql\n-- \u67e5\u770b\u6bcf\u4e2a\u6307\u6807\u7684\u6700\u65b0\u6570\u636e\u65e5\u671f\u548c\u6761\u6570\nSELECT indicator_id, region, COUNT(*) as cnt, MAX(trade_date) as latest\nFROM indicator_values\nGROUP BY indicator_id, region\nORDER BY latest DESC;\n\\`\\`\\`\n\n### \u5e38\u89c1\u95ee\u9898\u6392\u67e5\n\n**\u95ee\u9898 1\uff1aAKShare \u62a5 SSL \u9519\u8bef**\n- \u539f\u56e0\uff1a\u76ee\u6807\u6570\u636e\u6e90\u670d\u52a1\u5668 TLS \u7248\u672c\u8fc7\u4f4e\uff08\u8be6\u89c1\u300c\u8e29\u5751\u8bb0\u5f55\u300d\u6587\u6863\uff09\n- \u89e3\u51b3\uff1a\u68c0\u67e5\u811a\u672c\u4e2d\u662f\u5426\u5df2\u4f7f\u7528 \\`TLSAdapter\\` \u6216 \\`verify=False\\`\uff1b\u5bf9\u91d1\u5341\u6570\u636e\u7b49\u4e0d\u7a33\u5b9a\u6e90\uff0c\u53ef\u591a\u6b21\u91cd\u8dd1\n\n**\u95ee\u9898 2\uff1aSupabase \u5199\u5165\u62a5 RLS \u9519\u8bef**\n- \u539f\u56e0\uff1a\\`indicator_values\\` \u8868 RLS \u7b56\u7565\u8981\u6c42 \\`service_role\\` \u6743\u9650\uff0cupsert \u9700\u8981 \\`UPDATE\\` \u6743\u9650\n- \u89e3\u51b3\uff1a\u786e\u8ba4\u811a\u672c\u4f7f\u7528\u7684\u662f \\`service_role\\` key\uff1b\u68c0\u67e5 RLS \u7b56\u7565\u662f\u5426\u5141\u8bb8 \\`ALL\\` \u64cd\u4f5c\n\n**\u95ee\u9898 3\uff1a\u6570\u636e\u6761\u6570\u5f02\u5e38\uff08\u6bd4\u9884\u671f\u5c11\uff09**\n- \u539f\u56e0\uff1a\u90e8\u5206\u63a5\u53e3\u6309\u6708\u5206\u6279\u8bf7\u6c42\uff0cSSL \u5076\u53d1\u5931\u8d25\u4f1a\u8df3\u8fc7\u67d0\u4e9b\u6708\u4efd\n- \u89e3\u51b3\uff1a\u67e5\u8be2 \\`indicator_values\\` \u4e2d\u8be5\u6307\u6807\u7684\u65e5\u671f\u8fde\u7eed\u6027\uff0c\u627e\u5230\u7f3a\u5931\u6708\u4efd\u540e\u624b\u52a8\u8865\u8dd1\n",
-  },
-];
-
-export function loadDocs(): KnowledgeDoc[] {
-  try {
-    const storedVersion = parseInt(localStorage.getItem(VERSION_KEY) || '0', 10);
-    const stored = localStorage.getItem(STORAGE_KEY);
-
-    if (stored && storedVersion >= DOCS_VERSION) {
-      // 版本一致，直接返回缓存
-      return JSON.parse(stored);
-    }
-
-    if (stored && storedVersion < DOCS_VERSION) {
-      // 版本升级：用 INITIAL_DOCS 中的内置文档覆盖同 id 的旧文档，保留用户新建的文档
-      const cachedDocs: KnowledgeDoc[] = JSON.parse(stored);
-      const builtinIds = new Set(INITIAL_DOCS.map((d) => d.id));
-      const userDocs = cachedDocs.filter((d) => !builtinIds.has(d.id));
-      const merged = [...INITIAL_DOCS, ...userDocs];
-      localStorage.setItem(VERSION_KEY, String(DOCS_VERSION));
-      saveDocs(merged);
-      return merged;
-    }
-  } catch (e) {
-    console.error('Failed to load docs from localStorage', e);
-  }
-  // 首次加载，写入初始文档
-  localStorage.setItem(VERSION_KEY, String(DOCS_VERSION));
-  saveDocs(INITIAL_DOCS);
-  return INITIAL_DOCS;
-}
-
-export function saveDocs(docs: KnowledgeDoc[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
-  } catch (e) {
-    console.error('Failed to save docs to localStorage', e);
-  }
-}
-
-export function saveDoc(doc: KnowledgeDoc): KnowledgeDoc[] {
-  const docs = loadDocs();
-  const idx = docs.findIndex((d) => d.id === doc.id);
-  const updated = { ...doc, updatedAt: new Date().toISOString() };
-  if (idx >= 0) {
-    docs[idx] = updated;
-  } else {
-    docs.push(updated);
-  }
-  saveDocs(docs);
-  return docs;
-}
-
-export function deleteDoc(id: string): KnowledgeDoc[] {
-  const docs = loadDocs().filter((d) => d.id !== id);
-  saveDocs(docs);
-  return docs;
-}
-
-export function createDoc(
-  category: KnowledgeDoc['category'],
-  title: string,
-): KnowledgeDoc {
-  return {
-    id: `doc-${Date.now()}`,
-    category,
-    title,
-    content: "# ${title}\\n\\n\u5728\u6b64\u5904\u7f16\u5199\u5185\u5bb9...\\n",
-    tags: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-}
+    content: "# ETL 蓝图 v1：数据目录 & 运维手册\n\n本文档是 Trudecide 数据采集层的**一站式参考手册**，包含脚本清单、指标目录、调度计划和运维操作指南，供开发者和 AI 快速定位任何数据问题。\n\n---\n\n## 1. 脚本清单 (Script Inventory)\n\n| 脚本文件 | 主要职责 | 运行方式 |\n|---|---|---|\n| \\`scripts/backfill_all.py\\` | **首次全量回填**：采集 14 个核心宏观指标的全部历史数据 | \\`python3 scripts/backfill_all.py\\` |\n| \\`scripts/backfill_remaining.py\\` | **补充全量回填**：采集剩余 21 个宏观指标，包含各种特殊接口处理 | \\`python3 scripts/backfill_remaining.py\\` |\n| \\`scripts/collect_macro_cn.py\\` | **增量更新**：采集指定日期范围或单个指标的最新数据，用于定时任务 | \\`python3 scripts/collect_macro_cn.py --start_date YYYY-MM-DD\\` |\n\n---\n\n## 2. 指标目录 (Data Catalog)\n\n**总计 35 个指标，全部实现代码化采集，region = CN**\n\n### 日度指标（交易日更新）\n\n| 指标 ID | 指标名称 | 数据源接口 | 数据量 |\n|---|---|---|:---:|\n| \\`us_bond_10y\\` | 美国10年期国债收益率 | \\`bond_zh_us_rate\\` | 8800条 |\n| \\`cn_bond_10y\\` | 中国10年期国债收益率 | \\`bond_zh_us_rate\\` | 6030条 |\n| \\`rmb_usd\\` | 人民币兑美元中间价 | \\`currency_boc_sina\\` | 5467条 |\n| \\`all_a_pb\\` | 全A市场PB中位数 | \\`stock_a_all_pb\\` | 5127条 |\n| \\`hs300_pb\\` | 沪深300 PB | \\`stock_index_pb_lg\\` | 5073条 |\n| \\`hs300_pe\\` | 沪深300 PE | \\`stock_index_pe_lg\\` | 5072条 |\n| \\`margin_balance_sh\\` | 上海融资余额 | \\`margin_sh_detail\\` | 3857条 |\n| \\`margin_balance_sz\\` | 深圳融资余额 | \\`margin_sz_detail\\` | 3659条 |\n| \\`dr001\\` | 银行间隔夜回购（FR001替代） | \\`repo_rate_hist\\` | 2880条 |\n| \\`dr007\\` | 银行间7天回购（FR007替代） | \\`repo_rate_hist\\` | 2880条 |\n| \\`north_net_flow\\` | 北向资金净流入 | \\`stock_hsgt_hist_em\\` | 2264条 |\n| \\`shibor_on\\` | Shibor隔夜 | \\`shibor_hist\\` | 2228条 |\n| \\`shibor_1w\\` | Shibor 1周 | \\`shibor_hist\\` | 2228条 |\n| \\`lpr_1y\\` | 1年期LPR | \\`loan_prime_rate\\` | 1531条 |\n\n### 月度指标（每月固定日期更新）\n\n| 指标 ID | 指标名称 | 数据源接口 | 数据量 |\n|---|---|---|:---:|\n| \\`export_yoy\\` | 出口同比 | \\`macro_china_export_yoy\\` | 512条 |\n| \\`import_yoy\\` | 进口同比 | \\`macro_china_import_yoy\\` | 351条 |\n| \\`cpi_yoy\\` | CPI同比 | \\`macro_china_cpi_yoy\\` | 476条 |\n| \\`cpi_mom\\` | CPI环比 | \\`macro_china_cpi_monthly\\` | 217条 |\n| \\`industrial_yoy\\` | 工业增加值同比 | \\`macro_china_industrial_yoy\\` | 405条 |\n| \\`ppi_yoy\\` | PPI同比 | \\`macro_china_ppi_yoy\\` | 362条 |\n| \\`m2_yoy\\` | M2同比 | \\`macro_china_m2_yoy\\` | 337条 |\n| \\`m2_level\\` | M2余额 | \\`macro_china_m2\\` | 217条 |\n| \\`social_finance_yoy\\` | 社融存量同比 | \\`macro_china_shrzgm\\` | 217条 |\n| \\`social_finance\\` | 社融增量 | 商务部 HTTP API（TLSAdapter） | 132条 |\n| \\`pmi_mfg\\` | 制造业PMI | \\`macro_china_pmi\\` | 248条 |\n| \\`pmi_non_mfg\\` | 非制造业PMI | \\`macro_china_pmi\\` | 224条 |\n| \\`retail_yoy\\` | 社零同比 | \\`macro_china_consumer_goods_retail\\` | 188条 |\n| \\`fai_yoy\\` | 固投同比 | \\`macro_china_fai_yoy\\` | 180条 |\n| \\`unemployment_rate\\` | 城镇调查失业率 | 国家统计局 HTTP API | 97条 |\n| \\`new_loans\\` | 新增人民币贷款 | \\`macro_china_new_loans\\` | 30条 |\n| \\`lpr_5y\\` | 5年期LPR | \\`loan_prime_rate\\` | 79条 |\n\n### 季度指标（每季度末后约15-20天更新）\n\n| 指标 ID | 指标名称 | 数据源接口 | 数据量 |\n|---|---|---|:---:|\n| \\`gdp_level\\` | GDP总量（亿元） | \\`macro_china_gdp_yearly\\` | 80条 |\n| \\`gdp_qoq\\` | GDP季比 | 计算得出（从累计值反推） | 79条 |\n| \\`gdp_yoy\\` | GDP同比 | \\`macro_china_gdp_yoy\\` | 59条 |\n| \\`gdp_primary_*\\` | 三大产业增加值 | \\`macro_china_gdp_yearly\\` | 各80条 |\n\n---\n\n## 3. 调度计划 (Scheduling Plan)\n\n| 频率 | 执行时间 | 目标脚本 | 说明 |\n|:---:|---|---|---|\n| **日度** | 每个交易日 18:00 | \\`collect_macro_cn.py --start_date <today>\\` | 采集所有日度指标当天数据 |\n| **月度** | 每月 16 日 22:00 | \\`collect_macro_cn.py --start_date <last_month>\\` | 采集所有月度指标上月数据 |\n| **季度** | 每季度首月 20 日 22:00 | \\`collect_macro_cn.py --start_date <last_quarter>\\` | 采集所有季度指标上季度数据 |\n\n> **当前状态**：调度任务尚未配置，待产品上云后统一部署。候选方案：GitHub Actions（免费）或云服务器 Cron。\n\n---\n\n## 4. 运维手册 (Runbook)\n\n### 手动执行\n\n\\`\\`\\`bash\n# 全量回填（初始化时使用，一个脚本覆盖全部 35 个指标）\npython3 scripts/backfill_all.py\n\n# 增量补跑（补跑指定日期后的所有指标）\npython3 scripts/collect_macro_cn.py --start_date 2026-02-01\n\n# 只跑单个指标\npython3 scripts/collect_macro_cn.py --indicator cpi_yoy\n\\`\\`\\`\n\n### 数据验证 SQL\n\n\\`\\`\\`sql\n-- 查看每个指标的最新数据日期和条数\nSELECT indicator_id, region, COUNT(*) as cnt, MAX(trade_date) as latest\nFROM indicator_values\nGROUP BY indicator_id, region\nORDER BY latest DESC;\n\\`\\`\\`\n\n### 常见问题排查\n\n**问题 1：AKShare 报 SSL 错误**\n- 原因：目标数据源服务器 TLS 版本过低（详见「踩坑记录」文档）\n- 解决：检查脚本中是否已使用 \\`TLSAdapter\\` 或 \\`verify=False\\`；对金十数据等不稳定源，可多次重跑\n\n**问题 2：Supabase 写入报 RLS 错误**\n- 原因：\\`indicator_values\\` 表 RLS 策略要求 \\`service_role\\` 权限，upsert 需要 \\`UPDATE\\` 权限\n- 解决：确认脚本使用的是 \\`service_role\\` key；检查 RLS 策略是否允许 \\`ALL\\` 操作\n\n**问题 3：数据条数异常（比预期少）**\n- 原因：部分接口按月分批请求，SSL 偶发失败会跳过某些月份\n- 解决：查询 \\`indicator_values\\` 中该指标的日期连续性，找到缺失月份后手动补跑\n"
