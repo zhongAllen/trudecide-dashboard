@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { Link, useLocation, useParams } from 'wouter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ArrowLeft, Plus, Pencil, Trash2, Save, X, BookOpen, Search, Tag, Link2, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Save, X, BookOpen, Search, Tag, Link2, Check, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -14,6 +14,39 @@ import {
   deleteDoc,
   createDoc,
 } from '@/lib/knowledge';
+
+// ── 需求面板类型 ─────────────────────────────────────────────
+interface Requirement {
+  id: string;
+  doc_id: string | null;
+  title: string;
+  description: string | null;
+  status: 'open' | 'in_progress' | 'done' | 'closed';
+  priority: 1 | 2 | 3;
+  version: string | null;
+}
+
+const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL  as string;
+const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+const SUPA_HEADERS = {
+  apikey: SUPABASE_ANON,
+  Authorization: `Bearer ${SUPABASE_ANON}`,
+  'Content-Type': 'application/json',
+};
+
+const STATUS_META: Record<Requirement['status'], { label: string; color: string; bg: string }> = {
+  open:        { label: '待处理',  color: '#6b7280', bg: '#f3f4f6' },
+  in_progress: { label: '进行中',  color: '#2563eb', bg: '#eff6ff' },
+  done:        { label: '已完成',  color: '#16a34a', bg: '#f0fdf4' },
+  closed:      { label: '已关闭',  color: '#9ca3af', bg: '#f9fafb' },
+};
+
+const PRIORITY_META: Record<number, { label: string; color: string }> = {
+  1: { label: '高', color: '#dc2626' },
+  2: { label: '中', color: '#d97706' },
+  3: { label: '低', color: '#6b7280' },
+};
 
 export default function Knowledge() {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
@@ -27,6 +60,10 @@ export default function Knowledge() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewDocMenu, setShowNewDocMenu] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // ── 需求面板状态 ─────────────────────────────────────────────
+  const [reqs, setReqs] = useState<Requirement[]>([]);
+  const [updatingReqId, setUpdatingReqId] = useState<string | null>(null);
 
   // 从 URL 参数读取当前文档 ID（支持 /knowledge/:id 路由）
   const params = useParams<{ id?: string }>();
@@ -42,10 +79,39 @@ export default function Knowledge() {
       .finally(() => setLoading(false));
   }, []);
 
-  // 当 URL 中的 id 变化时，退出编辑模式
+  // 当 selectedId 变化时，加载关联需求并退出编辑模式
   useEffect(() => {
     setEditing(false);
+    if (!selectedId) { setReqs([]); return; }
+    fetch(
+      `${SUPABASE_URL}/rest/v1/requirements?doc_id=eq.${selectedId}&order=id.asc`,
+      { headers: SUPA_HEADERS }
+    )
+      .then((r) => r.json())
+      .then((data) => setReqs(Array.isArray(data) ? data : []))
+      .catch(() => setReqs([]));
   }, [selectedId]);
+
+  // 更新单条需求状态
+  const updateReqStatus = async (reqId: string, newStatus: Requirement['status']) => {
+    setUpdatingReqId(reqId);
+    try {
+      const resp = await fetch(
+        `${SUPABASE_URL}/rest/v1/requirements?id=eq.${reqId}`,
+        {
+          method: 'PATCH',
+          headers: { ...SUPA_HEADERS, Prefer: 'return=minimal' },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+      if (!resp.ok) throw new Error(`${resp.status}`);
+      setReqs((prev) => prev.map((r) => r.id === reqId ? { ...r, status: newStatus } : r));
+    } catch (e) {
+      alert(`更新失败：${String(e)}`);
+    } finally {
+      setUpdatingReqId(null);
+    }
+  };
 
   const selectedDoc = docs.find((d) => d.id === selectedId) ?? null;
 
@@ -608,6 +674,78 @@ export default function Knowledge() {
                   {selectedDoc.content}
                 </ReactMarkdown>
               </div>
+
+              {/* ── 关联需求面板 ── */}
+              {reqs.length > 0 && (
+                <div className="mt-10">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1 h-4 rounded-full bg-primary" />
+                    <h3 className="text-sm font-semibold text-foreground">关联需求</h3>
+                    <span className="text-xs text-muted-foreground ml-1">{reqs.length} 条</span>
+                  </div>
+                  <div className="space-y-2">
+                    {reqs.map((req) => {
+                      const sm = STATUS_META[req.status];
+                      const pm = PRIORITY_META[req.priority];
+                      return (
+                        <div
+                          key={req.id}
+                          className="flex items-start gap-3 p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
+                        >
+                          {/* ID + 优先级 */}
+                          <div className="flex flex-col items-center gap-1 pt-0.5 min-w-[52px]">
+                            <span className="text-xs font-mono text-muted-foreground">{req.id}</span>
+                            <span
+                              className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                              style={{ color: pm.color, backgroundColor: pm.color + '18' }}
+                            >
+                              {pm.label}先级
+                            </span>
+                          </div>
+
+                          {/* 标题 + 描述 */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground leading-snug">{req.title}</p>
+                            {req.description && (
+                              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
+                                {req.description}
+                              </p>
+                            )}
+                            {req.version && (
+                              <span className="text-[10px] text-muted-foreground mt-1 inline-block">
+                                {req.version}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* 状态切换下拉 */}
+                          <div className="relative flex-shrink-0">
+                            <select
+                              value={req.status}
+                              disabled={updatingReqId === req.id}
+                              onChange={(e) => updateReqStatus(req.id, e.target.value as Requirement['status'])}
+                              className="text-xs font-medium px-2 py-1 rounded border-0 cursor-pointer appearance-none pr-5"
+                              style={{
+                                color: sm.color,
+                                backgroundColor: sm.bg,
+                                opacity: updatingReqId === req.id ? 0.5 : 1,
+                              }}
+                            >
+                              {(Object.keys(STATUS_META) as Requirement['status'][]).map((s) => (
+                                <option key={s} value={s}>{STATUS_META[s].label}</option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              className="w-3 h-3 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none"
+                              style={{ color: sm.color }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>
