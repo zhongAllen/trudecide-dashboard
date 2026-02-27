@@ -91,9 +91,13 @@ export default function Knowledge() {
         .map((t) => t.trim())
         .filter(Boolean),
     };
-    await saveDoc(updated);
-    setDocs((prev) => prev.map((d) => d.id === updated.id ? updated : d));
-    setEditing(false);
+    try {
+      await saveDoc(updated);
+      setDocs((prev) => prev.map((d) => d.id === updated.id ? updated : d));
+      setEditing(false);
+    } catch (e) {
+      alert(`保存失败：${String(e)}`);
+    }
   };
 
   const handleDelete = async (id: string) => {
