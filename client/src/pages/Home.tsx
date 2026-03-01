@@ -51,6 +51,12 @@ export default function Home() {
               <span className="text-xs text-blue-200/70 font-mono tracking-wider">
                 v{__APP_VERSION__}
               </span>
+              <Link href="/macro-dashboard">
+                <button className="flex items-center gap-2 bg-white/15 hover:bg-white/25 border border-white/30 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
+                  <BarChart3 className="w-4 h-4" />
+                  宏观仪表盘
+                </button>
+              </Link>
               <Link href="/knowledge">
                 <button className="flex items-center gap-2 bg-white/15 hover:bg-white/25 border border-white/30 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
                   <BookOpen className="w-4 h-4" />
