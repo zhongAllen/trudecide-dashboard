@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   KnowledgeDoc,
   CATEGORY_META,
+  getCategoryMeta,
   loadDocs,
   saveDoc,
   deleteDoc,
@@ -245,12 +246,12 @@ export default function Knowledge() {
           name="description"
           content={
             selectedDoc
-              ? `${selectedDoc.title}（${CATEGORY_META[selectedDoc.category].label}）- 股票分析策略看板项目知识库`
+              ? `${selectedDoc.title}（${getCategoryMeta(selectedDoc.category).label}）- 股票分析策略看板项目知识库`
               : `股票分析策略看板项目知识库，共${docs.length}篇文档，分为需求文档、数据模型、AI边界、决策日志、Skills目录、踩坑记录六个分类。`
           }
         />
         <meta name="ai-context" content={aiContext} />
-        <meta name="ai-doc-index" content={docs.map(d => `[${CATEGORY_META[d.category].label}] ${d.title} (标签: ${d.tags.join(',')}) URL: /knowledge/${d.id}`).join(' | ')} />
+        <meta name="ai-doc-index" content={docs.map(d => `[${getCategoryMeta(d.category).label}] ${d.title} (标签: ${d.tags.join(',')}) URL: /knowledge/${d.id}`).join(' | ')} />
         <meta name="last-updated" content={docs.length > 0 ? new Date(Math.max(...docs.map(d => new Date(d.updatedAt).getTime()))).toISOString() : ''} />
         {selectedDoc && <meta name="ai-doc-content" content={selectedDoc.content.slice(0, 500)} />}
       </Helmet>
@@ -365,7 +366,7 @@ export default function Knowledge() {
               </div>
             )}
             {filteredDocs.map((doc) => {
-              const meta = CATEGORY_META[doc.category];
+              const meta = getCategoryMeta(doc.category);
               return (
                 <div
                   key={doc.id}
@@ -610,16 +611,16 @@ export default function Knowledge() {
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-lg">{CATEGORY_META[selectedDoc.category].icon}</span>
+                    <span className="text-lg">{getCategoryMeta(selectedDoc.category).icon}</span>
                     <Badge
                       variant="secondary"
                       style={{
-                        backgroundColor: CATEGORY_META[selectedDoc.category].color + '20',
-                        color: CATEGORY_META[selectedDoc.category].color,
-                        borderColor: CATEGORY_META[selectedDoc.category].color + '40',
+                        backgroundColor: getCategoryMeta(selectedDoc.category).color + '20',
+                        color: getCategoryMeta(selectedDoc.category).color,
+                        borderColor: getCategoryMeta(selectedDoc.category).color + '40',
                       }}
                     >
-                      {CATEGORY_META[selectedDoc.category].label}
+                      {getCategoryMeta(selectedDoc.category).label}
                     </Badge>
                   </div>
                   <h1 className="text-2xl font-bold">{selectedDoc.title}</h1>

@@ -58,7 +58,13 @@ export const CATEGORY_META: Record<string, { label: string; emoji: string; icon:
   pitfall:       { label: '踩坑记录',    emoji: '⚠️', icon: '⚠️', color: '#ef4444' },
   etl_blueprint: { label: 'ETL 蓝图',    emoji: '🔄', icon: '🔄', color: '#8b5cf6' },
   requirement:   { label: '需求文档',    emoji: '📋', icon: '📋', color: '#14b8a6' },
+  system_design: { label: '系统设计',    emoji: '🏗️', icon: '🏗️', color: '#64748b' },
 };
+
+/** 安全获取分类元信息，未知分类返回默认值，避免 undefined 导致崩溃 */
+export function getCategoryMeta(category: string) {
+  return CATEGORY_META[category] ?? { label: category, emoji: '📄', icon: '📄', color: '#94a3b8' };
+}
 
 // ── 读取操作 ───────────────────────────────────────────────────────────────────
 

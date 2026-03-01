@@ -34,7 +34,10 @@ from supabase import create_client
 TUSHARE_TOKEN   = os.environ.get("TUSHARE_TOKEN", "")
 SUPABASE_URL    = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY    = os.environ.get("SUPABASE_SERVICE_KEY", "")
-DEFAULT_START   = "2018-01-01"   # news 接口历史数据起始
+# 采集范围：近1个月（用户决策 2026-03-01）
+# 新闻快讯数据量大（每天数千条×9来源），存近1个月足够 AI 分析使用
+_DEFAULT_START_DAYS = 30
+DEFAULT_START   = (date.today() - timedelta(days=_DEFAULT_START_DAYS)).strftime('%Y-%m-%d')
 CHECKPOINT_FILE = "/tmp/news_checkpoint.txt"
 BATCH_SIZE      = 500
 API_SLEEP       = 1.0            # news 接口限额较严
@@ -79,15 +82,18 @@ def df_to_rows(df: pd.DataFrame, src: str) -> list:
     """将 Tushare news DataFrame 转换为 news 表行格式"""
     rows = []
     for _, r in df.iterrows():
-        title = str(r.get('title', '') or '')
+        title_raw = str(r.get('title', '') or '')
+        content_raw = str(r.get('content', '') or '')
         pub_time = str(r.get('datetime', '') or '')
-        # 生成去重 hash（与 DDL 中 GENERATED ALWAYS 列保持一致）
+        # title 为空时，从 content 截取前 100 字符作为 title（Tushare 新闻数据内容在 content 字段）
+        title = title_raw or content_raw[:100] or '(无标题)'
+        # 生成去重 hash（应用层计算，title_hash 是普通列非 GENERATED ALWAYS）
         title_hash = hashlib.md5(f"{src}|{pub_time}|{title}".encode()).hexdigest()
         row = {
             'src':         src,
             'pub_time':    pub_time if pub_time else None,
-            'title':       title or None,
-            'content':     str(r.get('content', '') or '') or None,
+            'title':       title,
+            'content':     content_raw or None,
             'ts_code':     str(r.get('codes', '') or '') or None,  # 关联股票代码
             'url':         str(r.get('url', '') or '') or None,
             'sentiment':   None,    # 预留，由 AI 分析后填入

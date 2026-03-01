@@ -52,7 +52,7 @@ SUPABASE_URL     = os.environ.get('SUPABASE_URL', '')
 SUPABASE_SVC_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
 
 MAX_WORKERS   = 20      # 并发线程数
-BATCH_SIZE    = 500     # 每批 upsert 行数
+BATCH_SIZE    = 300     # 踩坑 #57014: stock_daily 大表 upsert 必须小批次，否则 statement timeout
 API_SLEEP     = 0.2     # 每次请求间隔（秒）
 RETRY_TIMES   = 3       # 失败重试次数
 RETRY_SLEEP   = 5       # 重试等待（秒）
@@ -104,19 +104,30 @@ def retry_call(fn, retries=RETRY_TIMES, sleep_sec=RETRY_SLEEP, **kwargs):
 
 
 def upsert_batch(rows: list[dict]) -> int:
-    """分批 upsert 到 stock_daily 表"""
+    """分批 upsert 到 stock_daily 表
+    踩坑 #57014: stock_daily 表大，upsert 冲突检测慢，批次必须 ≤300 行
+    每批失败后指数退避重试，最多 5 次
+    """
     total = 0
     for i in range(0, len(rows), BATCH_SIZE):
         batch = rows[i:i + BATCH_SIZE]
-        resp = requests.post(
-            f'{SUPABASE_URL}/rest/v1/stock_daily',
-            headers=HEADERS,
-            json=batch,
-        )
-        if not resp.ok:
-            log.error(f"  upsert 失败: {resp.status_code} - {resp.text[:200]}")
-        else:
-            total += len(batch)
+        for attempt in range(5):
+            resp = requests.post(
+                f'{SUPABASE_URL}/rest/v1/stock_daily',
+                headers=HEADERS,
+                json=batch,
+            )
+            if resp.ok:
+                total += len(batch)
+                break
+            elif '57014' in resp.text or 'statement timeout' in resp.text:
+                wait = 10 * (attempt + 1)
+                log.warning(f"  57014 超时，{wait}s 后重试 (attempt {attempt+1}/5)")
+                time.sleep(wait)
+            else:
+                log.error(f"  upsert 失败: {resp.status_code} - {resp.text[:200]}")
+                break
+        time.sleep(0.1)  # 批次间短暂休息
     return total
 
 
