@@ -159,14 +159,17 @@ def collect_period(pro, start_date: str, end_date: str, dry_run: bool = False) -
         # 字段映射（Tushare name → stock_name，避免与 Python 内置冲突）
         df = df.rename(columns={'name': 'stock_name'})
 
-        # 处理 NULL 值
-        for col in ['author', 'stock_name', 'ts_code', 'inst_csname', 'ind_name']:
-            df[col] = df[col].where(df[col].notna(), None)
+        # 处理 NULL 值（含 abstr 摘要字段）
+        for col in ['abstr', 'author', 'stock_name', 'ts_code', 'inst_csname', 'ind_name']:
+            if col in df.columns:
+                df[col] = df[col].where(df[col].notna(), None)
+            else:
+                df[col] = None  # 接口未返回该字段时补 None
 
         # 转换 trade_date 为字符串（Supabase REST API 接受 ISO 格式）
         df['trade_date'] = df['trade_date'].astype(str)
 
-        rows = df[['trade_date', 'title_hash', 'title', 'report_type',
+        rows = df[['trade_date', 'title_hash', 'title', 'abstr', 'report_type',
                    'author', 'stock_name', 'ts_code', 'inst_csname',
                    'ind_name', 'url']].to_dict('records')
 
