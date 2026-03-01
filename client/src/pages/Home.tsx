@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import {
-  ChevronDown, TrendingUp, BarChart3, PieChart,
+  ChevronDown, ChevronRight, TrendingUp, BarChart3, PieChart,
   BookOpen, Loader2, AlertTriangle, HelpCircle, Globe
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/tooltip';
 import { INDICATORS } from '@/lib/indicators';
 import { supabase } from '@/lib/supabase';
-import { SubIndicatorDrawer } from '@/components/SubIndicatorDrawer';
+import { getSubIndicators, getSignalColor, getTrendIcon, getTrendColor, type SubIndicator } from '@/lib/mockSubIndicators';
 
 // ─────────────────────────────────────────────
 // 类型定义
@@ -231,6 +231,74 @@ function SummaryCell({ snapshots, timescale, loading }: {
 }
 
 // ─────────────────────────────────────────────
+// 子指标卡片（行内展开用）
+// ─────────────────────────────────────────────
+function SubIndicatorCard({ indicator, region }: { indicator: SubIndicator; region: string }) {
+  const [open, setOpen] = useState(false);
+  const sigColor = getSignalColor(indicator.signal);
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-background overflow-hidden">
+      {/* 卡片头部：指标名 + signal badge + 强度 */}
+      <div
+        className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-muted/40 transition-colors"
+        onClick={() => setOpen(o => !o)}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-semibold text-foreground truncate">{indicator.name}</div>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${sigColor.badge}`}>
+              {indicator.signal}
+            </span>
+            <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
+              <div
+                className={`h-full rounded-full ${sigColor.bg}`}
+                style={{ width: `${indicator.strength}%` }}
+              />
+            </div>
+            <span className="text-[10px] font-mono text-muted-foreground tabular-nums w-5 text-right">
+              {indicator.strength}
+            </span>
+          </div>
+        </div>
+        <ChevronRight className={`w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
+      </div>
+
+      {/* 展开：解读 + 定量数据 */}
+      {open && (
+        <div className="border-t border-border/40 px-3 py-2.5 space-y-2 bg-muted/20">
+          {/* 一句话解读 */}
+          <p className="text-xs text-muted-foreground leading-relaxed">{indicator.summary}</p>
+
+          {/* 定量数据表 */}
+          {indicator.quantData.length > 0 && (
+            <div className="space-y-1">
+              {indicator.quantData.map((q, i) => (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground/80 truncate flex-1 mr-2">{q.label}</span>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className={`font-mono font-semibold ${getTrendColor(q.trend)}`}>
+                      {getTrendIcon(q.trend)}{q.value}
+                    </span>
+                    {q.benchmark && (
+                      <span className="text-muted-foreground/50 text-[10px]">参考 {q.benchmark}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {/* 来源 */}
+              <div className="text-[10px] text-muted-foreground/40 pt-0.5">
+                来源：{indicator.quantData[0]?.source} · {indicator.quantData[0]?.date}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // 左侧指标列表
 // ─────────────────────────────────────────────
 function IndicatorList({ indicators }: { indicators: any[] }) {
@@ -256,18 +324,18 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 子维度钻取抽屉状态
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerDim, setDrawerDim] = useState<string>('');
-  const [drawerTs, setDrawerTs] = useState<string>('');
-  const [drawerTsLabel, setDrawerTsLabel] = useState<string>('');
+  // 行内展开状态：key = `${dim}__${tsKey}`，value = 是否展开
+  // 设计：每个维度行同时只允许一列展开（点同一列再次点击则收起）
+  const [expandedCell, setExpandedCell] = useState<string | null>(null);
 
   const handleCellClick = (dim: string, ts: { key: string; label: string; desc: string }) => {
-    setDrawerDim(dim);
-    setDrawerTs(ts.key);
-    setDrawerTsLabel(`${ts.label}（${ts.desc}）`);
-    setDrawerOpen(true);
+    if (loading) return;
+    const key = `${dim}__${ts.key}`;
+    setExpandedCell(prev => prev === key ? null : key);
   };
+
+  const isCellExpanded = (dim: string, tsKey: string) =>
+    expandedCell === `${dim}__${tsKey}`;
 
   const toggleCategory = (cat: string) =>
     setExpandedCategory(expandedCategory === cat ? null : cat);
@@ -299,21 +367,8 @@ export default function Home() {
     fetchSnapshots();
   }, []);
 
-  const drawerSnapshot = getCell(drawerDim, drawerTs);
-
   return (
     <div className="min-h-screen bg-background">
-      {/* 子维度钻取抽屉 */}
-      <SubIndicatorDrawer
-        open={drawerOpen}
-        onOpenChange={setDrawerOpen}
-        region={selectedRegion}
-        dimension={drawerDim}
-        timescale={drawerTs}
-        timescaleLabel={drawerTsLabel}
-        cellStatus={drawerSnapshot?.status}
-        cellScore={drawerSnapshot?.score}
-      />
       {/* ── Header ── */}
       <header className="gradient-header text-white py-8 px-4 sm:px-6 lg:px-8">
         <div className="container flex items-center justify-between">
@@ -580,50 +635,112 @@ export default function Home() {
                       </thead>
 
                       <tbody>
-                        {/* 四个维度行 */}
+                        {/* 四个维度行 + 行内展开行 */}
                         {DIMENSIONS.map((dim) => {
                           const impact = DIMENSION_ASHARE_IMPACT[dim];
+                          // 当前维度是否有展开的列
+                          const expandedTs = TIMESCALES.find(ts => isCellExpanded(dim, ts.key));
+                          const subIndicators = expandedTs
+                            ? getSubIndicators(selectedRegion, dim, expandedTs.key)
+                            : [];
+
                           return (
-                            <tr key={dim}>
-                              <td className="pr-3 align-middle">
-                                <span className="text-sm font-medium text-foreground">{dim}</span>
-                              </td>
-                              {/* 对A股影响列 */}
-                              <td className="px-1 align-middle">
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className={`flex items-center justify-center h-12 rounded-md px-2 gap-1 cursor-help ${impact?.bgColor ?? 'bg-gray-50'}`}>
-                                        <span className={`text-xs font-semibold ${impact?.color ?? 'text-gray-500'}`}>
-                                          {impact?.label ?? '—'}
-                                        </span>
-                                        <HelpCircle className="w-3 h-3 text-gray-300 flex-shrink-0" />
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-xs text-xs leading-relaxed">
-                                      <p className="font-semibold mb-1">{dim} → A股</p>
-                                      <p>{impact?.tooltip}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </td>
-                              {TIMESCALES.map((ts) => (
-                                <td key={ts.key} className="px-1 align-middle">
-                                  <div
-                                    className="cursor-pointer group"
-                                    onClick={() => !loading && handleCellClick(dim, ts)}
-                                    title={`点击查看「${dim} · ${ts.label}」子指标详情`}
-                                  >
-                                    <MatrixCell snapshot={getCell(dim, ts.key)} loading={loading} />
-                                    {!loading && (
-                                      <div className="text-center text-[10px] text-transparent group-hover:text-muted-foreground/60 transition-colors mt-0.5 leading-none select-none">
-                                        查看详情 →
-                                      </div>
-                                    )}
-                                  </div>
+                            <>
+                              {/* 维度主行 */}
+                              <tr key={dim}>
+                                <td className="pr-3 align-middle">
+                                  <span className="text-sm font-medium text-foreground">{dim}</span>
                                 </td>
-                              ))}
-                            </tr>
+                                {/* 对A股影响列 */}
+                                <td className="px-1 align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className={`flex items-center justify-center h-12 rounded-md px-2 gap-1 cursor-help ${impact?.bgColor ?? 'bg-gray-50'}`}>
+                                          <span className={`text-xs font-semibold ${impact?.color ?? 'text-gray-500'}`}>
+                                            {impact?.label ?? '—'}
+                                          </span>
+                                          <HelpCircle className="w-3 h-3 text-gray-300 flex-shrink-0" />
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="right" className="max-w-xs text-xs leading-relaxed">
+                                        <p className="font-semibold mb-1">{dim} → A股</p>
+                                        <p>{impact?.tooltip}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </td>
+                                {TIMESCALES.map((ts) => {
+                                  const isExpanded = isCellExpanded(dim, ts.key);
+                                  return (
+                                    <td key={ts.key} className="px-1 align-middle">
+                                      <div
+                                        className={`cursor-pointer group rounded-md transition-all ${
+                                          isExpanded ? 'ring-2 ring-primary/40 ring-offset-1' : ''
+                                        }`}
+                                        onClick={() => handleCellClick(dim, ts)}
+                                        title={isExpanded
+                                          ? `点击收起「${dim} · ${ts.label}」详情`
+                                          : `点击展开「${dim} · ${ts.label}」子指标`
+                                        }
+                                      >
+                                        <MatrixCell snapshot={getCell(dim, ts.key)} loading={loading} />
+                                        {!loading && (
+                                          <div className="flex items-center justify-center gap-0.5 text-[10px] text-transparent group-hover:text-muted-foreground/60 transition-colors mt-0.5 leading-none select-none">
+                                            <ChevronRight className={`w-2.5 h-2.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                            {isExpanded ? '收起' : '展开'}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+
+                              {/* 行内展开行：如果该维度有列展开则显示 */}
+                              {expandedTs && (
+                                <tr key={`${dim}__expand`}>
+                                  <td colSpan={5} className="px-0 pt-0 pb-2">
+                                    <div className="rounded-xl border border-primary/20 bg-primary/[0.02] overflow-hidden">
+                                      {/* 展开头部 */}
+                                      <div className="flex items-center gap-2 px-4 py-2.5 bg-primary/5 border-b border-primary/10">
+                                        <ChevronRight className="w-3.5 h-3.5 text-primary rotate-90" />
+                                        <span className="text-xs font-semibold text-primary">
+                                          {dim} · {expandedTs.label}（{expandedTs.desc}）
+                                        </span>
+                                        <span className="text-xs text-muted-foreground ml-1">— 子指标明细</span>
+                                        <span className="ml-auto text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                                          Mock 数据
+                                        </span>
+                                        <button
+                                          className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                                          onClick={() => setExpandedCell(null)}
+                                        >
+                                          收起 ✕
+                                        </button>
+                                      </div>
+
+                                      {/* 子指标卡片列表 */}
+                                      {subIndicators.length === 0 ? (
+                                        <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                                          暂无数据
+                                        </div>
+                                      ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
+                                          {subIndicators.map((ind: SubIndicator) => (
+                                            <SubIndicatorCard
+                                              key={ind.id}
+                                              indicator={ind}
+                                              region={selectedRegion}
+                                            />
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </>
                           );
                         })}
 
