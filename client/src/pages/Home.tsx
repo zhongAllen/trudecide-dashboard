@@ -1,9 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
-import { ChevronDown, TrendingUp, BarChart3, PieChart, BookOpen, Loader2, AlertTriangle } from 'lucide-react';
+import {
+  ChevronDown, TrendingUp, BarChart3, PieChart,
+  BookOpen, Loader2, AlertTriangle, HelpCircle
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { INDICATORS } from '@/lib/indicators';
 import { supabase } from '@/lib/supabase';
 
@@ -22,51 +31,170 @@ interface Snapshot {
   updated_at: string;
 }
 
-// 宽表的四个维度（行）和三个时间尺度（列）
+// 四个维度（行）和三个时间尺度（列）
 const DIMENSIONS = ['宏观经济', '流动性', '政策与预期', '市场估值情绪'];
 const TIMESCALES: { key: string; label: string; desc: string }[] = [
   { key: 'short', label: '短期', desc: '3–9 个月' },
-  { key: 'mid',   label: '中期', desc: '2–3 年' },
+  { key: 'mid',   label: '中期', desc: '2–3 年'  },
   { key: 'long',  label: '长期', desc: '5–10 年' },
 ];
 
-// 状态词对应的颜色样式
-const STATUS_STYLE: Record<string, { bg: string; text: string; border: string }> = {
-  '扩张': { bg: 'bg-green-50',  text: 'text-green-800',  border: 'border-green-200' },
-  '复苏': { bg: 'bg-blue-50',   text: 'text-blue-800',   border: 'border-blue-200'  },
-  '中性': { bg: 'bg-gray-50',   text: 'text-gray-700',   border: 'border-gray-200'  },
-  '放缓': { bg: 'bg-orange-50', text: 'text-orange-800', border: 'border-orange-200'},
-  '收缩': { bg: 'bg-red-50',    text: 'text-red-800',    border: 'border-red-200'   },
+// 状态词 → 颜色配置
+const STATUS_CONFIG: Record<string, {
+  badgeBg: string;
+  badgeText: string;
+  scoreBg: string;
+  scoreText: string;
+  rowBg: string;
+}> = {
+  '扩张': {
+    badgeBg:   'bg-emerald-100', badgeText: 'text-emerald-800',
+    scoreBg:   'bg-emerald-50',  scoreText: 'text-emerald-700',
+    rowBg:     'bg-emerald-50/60',
+  },
+  '复苏': {
+    badgeBg:   'bg-blue-100',    badgeText: 'text-blue-800',
+    scoreBg:   'bg-blue-50',     scoreText: 'text-blue-700',
+    rowBg:     'bg-blue-50/60',
+  },
+  '中性': {
+    badgeBg:   'bg-gray-100',    badgeText: 'text-gray-700',
+    scoreBg:   'bg-gray-50',     scoreText: 'text-gray-600',
+    rowBg:     'bg-gray-50/60',
+  },
+  '放缓': {
+    badgeBg:   'bg-amber-100',   badgeText: 'text-amber-800',
+    scoreBg:   'bg-amber-50',    scoreText: 'text-amber-700',
+    rowBg:     'bg-amber-50/60',
+  },
+  '收缩': {
+    badgeBg:   'bg-red-100',     badgeText: 'text-red-800',
+    scoreBg:   'bg-red-50',      scoreText: 'text-red-700',
+    rowBg:     'bg-red-50/60',
+  },
 };
+
+// 根据分数推断状态词（用于综合评估行）
+function scoreToStatus(score: number): string {
+  if (score >= 75) return '扩张';
+  if (score >= 60) return '复苏';
+  if (score >= 45) return '中性';
+  if (score >= 30) return '放缓';
+  return '收缩';
+}
 
 // ─────────────────────────────────────────────
 // 矩阵单元格组件
 // ─────────────────────────────────────────────
-function MatrixCell({ snapshot }: { snapshot?: Snapshot }) {
+function MatrixCell({ snapshot, loading }: { snapshot?: Snapshot; loading?: boolean }) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-14 rounded-lg border border-dashed border-gray-200 bg-gray-50">
+        <Loader2 className="w-4 h-4 animate-spin text-gray-300" />
+      </div>
+    );
+  }
   if (!snapshot) {
     return (
-      <div className="flex flex-col items-center justify-center h-24 rounded-lg border border-dashed border-gray-200 bg-gray-50/50 text-gray-400 text-sm">
-        <span>待计算</span>
+      <div className="flex items-center justify-center h-14 rounded-lg border border-dashed border-gray-200 bg-gray-50/50 text-gray-400 text-xs">
+        待计算
       </div>
     );
   }
 
-  const style = STATUS_STYLE[snapshot.status] ?? STATUS_STYLE['中性'];
+  const cfg = STATUS_CONFIG[snapshot.status] ?? STATUS_CONFIG['中性'];
 
   return (
-    <div className={`relative flex flex-col items-center justify-center h-24 rounded-lg border ${style.border} ${style.bg} gap-1 px-2`}>
+    <div className={`relative flex items-center justify-between h-14 rounded-lg border px-3 gap-2 ${cfg.rowBg} border-transparent`}>
+      {/* 左：状态 Badge */}
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.badgeBg} ${cfg.badgeText}`}>
+        {snapshot.status}
+      </span>
+
+      {/* 右：分数 + 问号 */}
+      <div className="flex items-center gap-1">
+        <span className={`text-2xl font-mono font-bold tabular-nums ${cfg.scoreText}`}>
+          {snapshot.score}
+        </span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <HelpCircle className="w-3.5 h-3.5 text-gray-300 cursor-help flex-shrink-0" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+              <p className="font-semibold mb-1">分数说明（0–100）</p>
+              <p>分数表示当前状态的强度，分数越高代表信号越强。</p>
+              <p className="mt-1">例：<span className="font-medium">扩张 80</span> = 扩张信号较强；<span className="font-medium">扩张 52</span> = 刚进入扩张区间。</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+
+      {/* 异常标记 */}
       {snapshot.alert_flag && (
-        <AlertTriangle className="absolute top-1.5 right-1.5 w-3.5 h-3.5 text-orange-500" />
+        <AlertTriangle className="absolute top-1 right-1 w-3 h-3 text-orange-500" />
       )}
-      <span className={`text-base font-bold ${style.text}`}>{snapshot.status}</span>
-      <span className={`text-2xl font-mono font-semibold ${style.text}`}>{snapshot.score}</span>
-      <span className="text-xs text-gray-400">分</span>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────
-// 左侧指标列表渲染
+// 综合评估行单元格
+// ─────────────────────────────────────────────
+function SummaryCell({ snapshots, timescale, loading }: {
+  snapshots: Snapshot[];
+  timescale: string;
+  loading?: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-14 rounded-lg bg-slate-100 border border-slate-200">
+        <Loader2 className="w-4 h-4 animate-spin text-gray-300" />
+      </div>
+    );
+  }
+
+  const cells = snapshots.filter((s) => s.timescale === timescale);
+  if (cells.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-14 rounded-lg bg-slate-100 border border-slate-200 text-gray-400 text-xs">
+        待计算
+      </div>
+    );
+  }
+
+  const avgScore = Math.round(cells.reduce((sum, s) => sum + s.score, 0) / cells.length);
+  const status = scoreToStatus(avgScore);
+  const cfg = STATUS_CONFIG[status];
+
+  return (
+    <div className={`relative flex items-center justify-between h-14 rounded-lg border px-3 gap-2 bg-slate-100 border-slate-200`}>
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.badgeBg} ${cfg.badgeText}`}>
+        {status}
+      </span>
+      <div className="flex items-center gap-1">
+        <span className={`text-2xl font-mono font-bold tabular-nums ${cfg.scoreText}`}>
+          {avgScore}
+        </span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <HelpCircle className="w-3.5 h-3.5 text-gray-300 cursor-help flex-shrink-0" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+              <p className="font-semibold mb-1">综合评估说明</p>
+              <p>该列四个维度分数的简单平均值，仅供参考。</p>
+              <p className="mt-1">后续版本将支持自定义各维度权重。</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 左侧指标列表
 // ─────────────────────────────────────────────
 function IndicatorList({ indicators }: { indicators: any[] }) {
   return (
@@ -93,12 +221,10 @@ export default function Home() {
   const toggleCategory = (cat: string) =>
     setExpandedCategory(expandedCategory === cat ? null : cat);
 
-  // 从快照数组中查找特定维度+时间尺度的数据
   const getCell = (dimension: string, timescale: string) =>
     snapshots.find((s) => s.dimension === dimension && s.timescale === timescale);
 
-  // 获取最新快照月份
-  const latestMonth = snapshots[0]?.snapshot_month ?? '—';
+  const latestMonth   = snapshots[0]?.snapshot_month ?? '—';
   const latestVersion = snapshots[0]?.config_version ?? '—';
 
   useEffect(() => {
@@ -109,8 +235,7 @@ export default function Home() {
           .from('macro_wide_snapshot')
           .select('*')
           .order('snapshot_month', { ascending: false })
-          .limit(12); // 只取最新一期的12条
-
+          .limit(12);
         if (error) throw error;
         setSnapshots(data || []);
       } catch (err: any) {
@@ -154,7 +279,7 @@ export default function Home() {
       <main className="container py-8">
         <div className="flex gap-6 items-start">
 
-          {/* ── 左侧：分析层面目录（固定宽度） ── */}
+          {/* ── 左侧：分析层面目录 ── */}
           <div className="w-64 flex-shrink-0">
             <div className="sticky top-4 space-y-3">
               <h2 className="text-xl font-bold mb-4">分析层面</h2>
@@ -237,16 +362,29 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ── 右侧：宏观状态矩阵（占满剩余宽度） ── */}
+          {/* ── 右侧：宏观状态矩阵 ── */}
           <div className="flex-1 min-w-0">
             <Card>
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle>宏观状态矩阵</CardTitle>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle className="flex items-center gap-2">
+                    宏观状态矩阵
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-sm text-xs leading-relaxed">
+                          <p className="font-semibold mb-1">如何阅读此矩阵？</p>
+                          <p>矩阵由 <span className="font-medium">4个维度（行）× 3个时间尺度（列）</span> 组成，共12个子结论。</p>
+                          <p className="mt-1">每个格子展示该维度在该时间尺度下的 <span className="font-medium">定性状态</span> 和 <span className="font-medium">强度分（0-100）</span>。</p>
+                          <p className="mt-1">底部"综合评估"行为四个维度的简单平均，代表整体宏观状况。</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </CardTitle>
                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    {loading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
+                    {!loading && (
                       <>
                         <span>快照月份：<span className="font-mono font-medium text-foreground">{latestMonth}</span></span>
                         <span>模型版本：<span className="font-mono font-medium text-foreground">v{latestVersion}</span></span>
@@ -258,6 +396,7 @@ export default function Home() {
                   </div>
                 </div>
               </CardHeader>
+
               <CardContent>
                 {error && (
                   <Alert variant="destructive">
@@ -268,49 +407,77 @@ export default function Home() {
 
                 {!error && (
                   <div className="overflow-x-auto">
-                    {/* 矩阵表格 */}
-                    <table className="w-full">
+                    <table className="w-full border-separate border-spacing-y-2">
+                      {/* 表头 */}
                       <thead>
                         <tr>
-                          {/* 左上角空白 */}
-                          <th className="w-36 pb-3 text-left text-sm font-semibold text-muted-foreground">维度 / 时间</th>
+                          <th className="w-32 pb-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                            维度
+                          </th>
                           {TIMESCALES.map((ts) => (
-                            <th key={ts.key} className="pb-3 text-center">
-                              <div className="text-sm font-semibold">{ts.label}</div>
+                            <th key={ts.key} className="pb-2 text-center">
+                              <div className="text-sm font-semibold text-foreground">{ts.label}</div>
                               <div className="text-xs text-muted-foreground font-normal">{ts.desc}</div>
                             </th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="space-y-2">
+
+                      <tbody>
+                        {/* 四个维度行 */}
                         {DIMENSIONS.map((dim) => (
-                          <tr key={dim} className="border-t border-border/50">
-                            {/* 维度标签 */}
-                            <td className="py-3 pr-4 text-sm font-medium text-foreground align-middle w-36">
-                              {dim}
+                          <tr key={dim}>
+                            <td className="pr-4 align-middle">
+                              <span className="text-sm font-medium text-foreground">{dim}</span>
                             </td>
-                            {/* 三个时间尺度的单元格 */}
                             {TIMESCALES.map((ts) => (
-                              <td key={ts.key} className="py-3 px-2 align-middle">
-                                {loading ? (
-                                  <div className="h-24 rounded-lg border border-dashed border-gray-200 bg-gray-50 flex items-center justify-center">
-                                    <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
-                                  </div>
-                                ) : (
-                                  <MatrixCell snapshot={getCell(dim, ts.key)} />
-                                )}
+                              <td key={ts.key} className="px-1.5 align-middle">
+                                <MatrixCell snapshot={getCell(dim, ts.key)} loading={loading} />
                               </td>
                             ))}
                           </tr>
                         ))}
+
+                        {/* 分隔线 */}
+                        <tr>
+                          <td colSpan={4} className="py-1">
+                            <div className="border-t border-dashed border-gray-200" />
+                          </td>
+                        </tr>
+
+                        {/* 综合评估行 */}
+                        <tr>
+                          <td className="pr-4 align-middle">
+                            <div className="flex items-center gap-1">
+                              <span className="text-sm font-semibold text-foreground">综合评估</span>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <HelpCircle className="w-3.5 h-3.5 text-gray-300 cursor-help" />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-xs text-xs leading-relaxed">
+                                    <p className="font-semibold mb-1">综合评估说明</p>
+                                    <p>该行为四个维度在同一时间尺度下的简单平均分，代表该时间段内的整体宏观状况。</p>
+                                    <p className="mt-1 text-gray-400">后续版本将支持自定义各维度权重。</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          </td>
+                          {TIMESCALES.map((ts) => (
+                            <td key={ts.key} className="px-1.5 align-middle">
+                              <SummaryCell snapshots={snapshots} timescale={ts.key} loading={loading} />
+                            </td>
+                          ))}
+                        </tr>
                       </tbody>
                     </table>
 
                     {/* 图例 */}
-                    <div className="mt-6 pt-4 border-t border-border/50 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">状态说明：</span>
-                      {Object.entries(STATUS_STYLE).map(([status, style]) => (
-                        <span key={status} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border ${style.bg} ${style.text} ${style.border}`}>
+                    <div className="mt-4 pt-4 border-t border-border/50 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">状态：</span>
+                      {Object.entries(STATUS_CONFIG).map(([status, cfg]) => (
+                        <span key={status} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.badgeBg} ${cfg.badgeText}`}>
                           {status}
                         </span>
                       ))}
