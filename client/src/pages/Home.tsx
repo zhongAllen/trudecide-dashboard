@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/tooltip';
 import { INDICATORS } from '@/lib/indicators';
 import { supabase } from '@/lib/supabase';
+import { SubIndicatorDrawer } from '@/components/SubIndicatorDrawer';
 
 // ─────────────────────────────────────────────
 // 类型定义
@@ -255,6 +256,19 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 子维度钻取抽屉状态
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerDim, setDrawerDim] = useState<string>('');
+  const [drawerTs, setDrawerTs] = useState<string>('');
+  const [drawerTsLabel, setDrawerTsLabel] = useState<string>('');
+
+  const handleCellClick = (dim: string, ts: { key: string; label: string; desc: string }) => {
+    setDrawerDim(dim);
+    setDrawerTs(ts.key);
+    setDrawerTsLabel(`${ts.label}（${ts.desc}）`);
+    setDrawerOpen(true);
+  };
+
   const toggleCategory = (cat: string) =>
     setExpandedCategory(expandedCategory === cat ? null : cat);
 
@@ -285,8 +299,21 @@ export default function Home() {
     fetchSnapshots();
   }, []);
 
+  const drawerSnapshot = getCell(drawerDim, drawerTs);
+
   return (
     <div className="min-h-screen bg-background">
+      {/* 子维度钻取抽屉 */}
+      <SubIndicatorDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        region={selectedRegion}
+        dimension={drawerDim}
+        timescale={drawerTs}
+        timescaleLabel={drawerTsLabel}
+        cellStatus={drawerSnapshot?.status}
+        cellScore={drawerSnapshot?.score}
+      />
       {/* ── Header ── */}
       <header className="gradient-header text-white py-8 px-4 sm:px-6 lg:px-8">
         <div className="container flex items-center justify-between">
@@ -582,7 +609,18 @@ export default function Home() {
                               </td>
                               {TIMESCALES.map((ts) => (
                                 <td key={ts.key} className="px-1 align-middle">
-                                  <MatrixCell snapshot={getCell(dim, ts.key)} loading={loading} />
+                                  <div
+                                    className="cursor-pointer group"
+                                    onClick={() => !loading && handleCellClick(dim, ts)}
+                                    title={`点击查看「${dim} · ${ts.label}」子指标详情`}
+                                  >
+                                    <MatrixCell snapshot={getCell(dim, ts.key)} loading={loading} />
+                                    {!loading && (
+                                      <div className="text-center text-[10px] text-transparent group-hover:text-muted-foreground/60 transition-colors mt-0.5 leading-none select-none">
+                                        查看详情 →
+                                      </div>
+                                    )}
+                                  </div>
                                 </td>
                               ))}
                             </tr>
