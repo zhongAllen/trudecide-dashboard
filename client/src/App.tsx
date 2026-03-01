@@ -7,7 +7,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
-import MacroDashboard from "./pages/MacroDashboard";
+
 
 
 function Router() {
@@ -16,7 +16,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/knowledge" component={Knowledge} />
       <Route path="/knowledge/:id" component={Knowledge} />
-      <Route path="/macro-dashboard" component={MacroDashboard} />
+
       <Route path="/404" component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
