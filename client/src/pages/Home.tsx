@@ -39,6 +39,39 @@ const REGIONS = [
 
 // 四个维度（行）和三个时间尺度（列）
 const DIMENSIONS = ['宏观经济', '流动性', '政策与预期', '市场估值情绪'];
+
+// 各维度对A股的影响说明
+const DIMENSION_ASHARE_IMPACT: Record<string, {
+  label: string;
+  color: string;
+  bgColor: string;
+  tooltip: string;
+}> = {
+  '宏观经济': {
+    label: '正相关',
+    color: 'text-emerald-700',
+    bgColor: 'bg-emerald-50',
+    tooltip: '宏观经济扩张时，企业盈利改善，推动股市上涨；收缩时反之。PMI、GDP增速是核心观测指标。',
+  },
+  '流动性': {
+    label: '正相关',
+    color: 'text-emerald-700',
+    bgColor: 'bg-emerald-50',
+    tooltip: '流动性宽松时，资金成本下降，更多资金流入股市；收紧时资金回流债市或现金，股市承压。',
+  },
+  '政策与预期': {
+    label: '正相关',
+    color: 'text-emerald-700',
+    bgColor: 'bg-emerald-50',
+    tooltip: '政策刺激（财政扩张、产业支持）提振市场信心和企业预期，是A股短期上涨的重要催化剂。',
+  },
+  '市场估值情绪': {
+    label: '正相关',
+    color: 'text-emerald-700',
+    bgColor: 'bg-emerald-50',
+    tooltip: '估值越低（低估/极度低估），安全边际越高，未来上涨空间越大；泡沫阶段则风险极高。注意：此维度分数高代表估值越低（对投资者越有利）。',
+  },
+};
 const TIMESCALES: { key: string; label: string; desc: string }[] = [
   { key: 'short', label: '短期', desc: '3–9 个月' },
   { key: 'mid',   label: '中期', desc: '2–3 年'  },
@@ -493,6 +526,23 @@ export default function Home() {
                           <th className="w-28 pb-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                             维度
                           </th>
+                          <th className="w-24 pb-3 text-center">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="inline-flex items-center gap-1 cursor-help">
+                                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">对A股影响</span>
+                                    <HelpCircle className="w-3 h-3 text-gray-300" />
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+                                  <p className="font-semibold mb-1">对A股影响说明</p>
+                                  <p>该维度指标变好时，对A股大盘的方向性影响。正相关表示该维度改善时A股倾向上涨，负相关则反之。</p>
+                                  <p className="mt-1 text-gray-400">注：影响程度因市场环境而异，仅供参考。</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </th>
                           {TIMESCALES.map((ts) => (
                             <th key={ts.key} className="pb-3 text-center min-w-[160px]">
                               <div className="text-sm font-semibold text-foreground">{ts.label}</div>
@@ -504,22 +554,44 @@ export default function Home() {
 
                       <tbody>
                         {/* 四个维度行 */}
-                        {DIMENSIONS.map((dim) => (
-                          <tr key={dim}>
-                            <td className="pr-3 align-middle">
-                              <span className="text-sm font-medium text-foreground">{dim}</span>
-                            </td>
-                            {TIMESCALES.map((ts) => (
-                              <td key={ts.key} className="px-1 align-middle">
-                                <MatrixCell snapshot={getCell(dim, ts.key)} loading={loading} />
+                        {DIMENSIONS.map((dim) => {
+                          const impact = DIMENSION_ASHARE_IMPACT[dim];
+                          return (
+                            <tr key={dim}>
+                              <td className="pr-3 align-middle">
+                                <span className="text-sm font-medium text-foreground">{dim}</span>
                               </td>
-                            ))}
-                          </tr>
-                        ))}
+                              {/* 对A股影响列 */}
+                              <td className="px-1 align-middle">
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className={`flex items-center justify-center h-12 rounded-md px-2 gap-1 cursor-help ${impact?.bgColor ?? 'bg-gray-50'}`}>
+                                        <span className={`text-xs font-semibold ${impact?.color ?? 'text-gray-500'}`}>
+                                          {impact?.label ?? '—'}
+                                        </span>
+                                        <HelpCircle className="w-3 h-3 text-gray-300 flex-shrink-0" />
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="right" className="max-w-xs text-xs leading-relaxed">
+                                      <p className="font-semibold mb-1">{dim} → A股</p>
+                                      <p>{impact?.tooltip}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </td>
+                              {TIMESCALES.map((ts) => (
+                                <td key={ts.key} className="px-1 align-middle">
+                                  <MatrixCell snapshot={getCell(dim, ts.key)} loading={loading} />
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
 
                         {/* 分隔线 */}
                         <tr>
-                          <td colSpan={4} className="py-0.5">
+                          <td colSpan={5} className="py-0.5">
                             <div className="border-t border-dashed border-gray-200" />
                           </td>
                         </tr>
@@ -543,6 +615,10 @@ export default function Home() {
                               </TooltipProvider>
                             </div>
                           </td>
+                          {/* 综合评估行：对A股影响列留空 */}
+                          <td className="px-1 align-middle">
+                            <div className="flex items-center justify-center h-12 rounded-md bg-slate-50 text-gray-300 text-xs">—</div>
+                          </td>
                           {TIMESCALES.map((ts) => (
                             <td key={ts.key} className="px-1 align-middle">
                               <SummaryCell snapshots={regionSnapshots} timescale={ts.key} loading={loading} />
@@ -552,28 +628,7 @@ export default function Home() {
                       </tbody>
                     </table>
 
-                    {/* 图例 */}
-                    <div className="mt-4 pt-3 border-t border-border/50 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground mr-1">图例：</span>
-                      {['扩张/宽松/强刺激/极度低估', '复苏/适度宽松/温和宽松/低估', '中性/合理', '放缓/偏紧/温和收紧/高估', '收缩/收紧/强收紧/泡沫'].map((label, i) => {
-                        const colors = [
-                          { bg: 'bg-emerald-100', text: 'text-emerald-800' },
-                          { bg: 'bg-blue-100',    text: 'text-blue-800'    },
-                          { bg: 'bg-gray-100',    text: 'text-gray-700'    },
-                          { bg: 'bg-amber-100',   text: 'text-amber-800'   },
-                          { bg: 'bg-red-100',     text: 'text-red-800'     },
-                        ];
-                        return (
-                          <span key={i} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors[i].bg} ${colors[i].text}`}>
-                            {label}
-                          </span>
-                        );
-                      })}
-                      <span className="ml-1 flex items-center gap-1">
-                        <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
-                        异常触发
-                      </span>
-                    </div>
+
                   </div>
                 )}
               </CardContent>
