@@ -697,47 +697,57 @@ export default function Home() {
                                 })}
                               </tr>
 
-                              {/* 行内展开行：如果该维度有列展开则显示 */}
+                              {/* 行内展开行：列结构与矩阵完全对齐 */}
                               {expandedTs && (
                                 <tr key={`${dim}__expand`}>
-                                  <td colSpan={5} className="px-0 pt-0 pb-2">
-                                    <div className="rounded-xl border border-primary/20 bg-primary/[0.02] overflow-hidden">
-                                      {/* 展开头部 */}
-                                      <div className="flex items-center gap-2 px-4 py-2.5 bg-primary/5 border-b border-primary/10">
-                                        <ChevronRight className="w-3.5 h-3.5 text-primary rotate-90" />
-                                        <span className="text-xs font-semibold text-primary">
-                                          {dim} · {expandedTs.label}（{expandedTs.desc}）
-                                        </span>
-                                        <span className="text-xs text-muted-foreground ml-1">— 子指标明细</span>
-                                        <span className="ml-auto text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                                          Mock 数据
-                                        </span>
-                                        <button
-                                          className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                                          onClick={() => setExpandedCell(null)}
-                                        >
-                                          收起 ✕
-                                        </button>
-                                      </div>
-
-                                      {/* 子指标卡片列表 */}
-                                      {subIndicators.length === 0 ? (
-                                        <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                                          暂无数据
-                                        </div>
-                                      ) : (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
-                                          {subIndicators.map((ind: SubIndicator) => (
-                                            <SubIndicatorCard
-                                              key={ind.id}
-                                              indicator={ind}
-                                              region={selectedRegion}
-                                            />
-                                          ))}
-                                        </div>
-                                      )}
+                                  {/* 维度名列：显示展开标识 */}
+                                  <td className="pr-3 align-top pt-1 pb-3">
+                                    <div className="flex items-center gap-1 text-xs text-primary/70 font-medium">
+                                      <ChevronRight className="w-3 h-3 rotate-90 flex-shrink-0" />
+                                      <span>子指标</span>
                                     </div>
                                   </td>
+                                  {/* 对A股影响列：Mock标注 + 收起按鈕 */}
+                                  <td className="px-1 align-top pt-1 pb-3">
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 whitespace-nowrap">
+                                        Mock
+                                      </span>
+                                      <button
+                                        className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                                        onClick={() => setExpandedCell(null)}
+                                      >
+                                        收起
+                                      </button>
+                                    </div>
+                                  </td>
+                                  {/* 三个时间尺度列：各展示该列子指标 */}
+                                  {TIMESCALES.map((ts) => {
+                                    const colInds = getSubIndicators(selectedRegion, dim, ts.key);
+                                    const isActive = isCellExpanded(dim, ts.key);
+                                    return (
+                                      <td
+                                        key={ts.key}
+                                        className={`px-1 align-top pt-1 pb-3 ${
+                                          isActive ? 'bg-primary/[0.03] rounded-b-md' : ''
+                                        }`}
+                                      >
+                                        {colInds.length === 0 ? (
+                                          <div className="text-[10px] text-muted-foreground/40 text-center py-2">暂无数据</div>
+                                        ) : (
+                                          <div className="space-y-1.5">
+                                            {colInds.map((ind: SubIndicator) => (
+                                              <SubIndicatorCard
+                                                key={ind.id}
+                                                indicator={ind}
+                                                region={selectedRegion}
+                                              />
+                                            ))}
+                                          </div>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
                                 </tr>
                               )}
                             </>

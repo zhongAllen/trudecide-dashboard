@@ -78,8 +78,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
 
   'CN_宏观经济_short': [
     {
-      id: 'pmi_mfg',
-      name: '制造业 PMI',
+      id: 'pmi',
+      name: 'PMI（采购经理指数）',
       signal: '扩张',
       strength: 72,
       summary: '制造业 PMI 连续 3 个月站上荣枯线，新订单分项持续改善，短期经济动能较强。',
@@ -90,25 +90,24 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
       weight: 5,
     },
     {
-      id: 'cpi_yoy',
-      name: 'CPI 同比',
+      id: 'cpi',
+      name: 'CPI（消费者物价指数）',
       signal: '中性',
       strength: 50,
       summary: 'CPI 温和回升，通缩压力有所缓解，但仍低于 2% 政策目标，需持续观察。',
       quantData: [
         { label: 'CPI 同比', value: '0.8%', benchmark: '2.0%（政策目标）', trend: 'up', source: '国家统计局', date: '2026-01' },
-        { label: 'PPI 同比', value: '-1.2%', benchmark: '0%', trend: 'up', source: '国家统计局', date: '2026-01' },
       ],
       weight: 4,
     },
     {
-      id: 'export_yoy',
-      name: '出口同比增速',
-      signal: '扩张',
-      strength: 65,
-      summary: '出口增速超预期，东南亚及欧洲订单回暖，外需对经济的拉动作用明显。',
+      id: 'ppi',
+      name: 'PPI（生产者物价指数）',
+      signal: '放缓',
+      strength: 38,
+      summary: 'PPI 持续负增长，工业品价格通缩压力仍在，企业利润修复节奏偏慢。',
       quantData: [
-        { label: '出口同比', value: '+8.2%', benchmark: '+5.0%（市场预期）', trend: 'up', source: '海关总署', date: '2026-01' },
+        { label: 'PPI 同比', value: '-1.2%', benchmark: '0%（通缩分界线）', trend: 'up', source: '国家统计局', date: '2026-01' },
       ],
       weight: 3,
     },
@@ -116,8 +115,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
 
   'CN_宏观经济_mid': [
     {
-      id: 'gdp_yoy',
-      name: 'GDP 同比增速',
+      id: 'gdp',
+      name: 'GDP增速',
       signal: '复苏',
       strength: 60,
       summary: '中期 GDP 增速预计维持在 4.5–5% 区间，内需驱动逐步替代出口，结构转型持续推进。',
@@ -128,24 +127,24 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
       weight: 5,
     },
     {
-      id: 'retail_sales',
-      name: '社会消费品零售总额同比',
+      id: 'pmi_mid',
+      name: 'PMI（采购经理指数）',
       signal: '复苏',
       strength: 55,
-      summary: '消费复苏节奏偏慢，居民消费意愿仍受就业预期影响，中期需关注消费刺激政策效果。',
+      summary: 'PMI 均值超荣枯线，中期制造业景气温和改善，但内需拉动力度仍需观察。',
       quantData: [
-        { label: '零售总额同比', value: '+4.1%', benchmark: '+5.5%（历史均值）', trend: 'up', source: '国家统计局', date: '2025-12' },
+        { label: 'PMI 近 12 月均值', value: '50.4', benchmark: '50.0（荣枯线）', trend: 'up', source: '国家统计局', date: '2025-12' },
       ],
       weight: 4,
     },
     {
-      id: 'ppi_yoy',
-      name: 'PPI 同比',
-      signal: '放缓',
-      strength: 40,
-      summary: 'PPI 持续负增长，工业品价格通缩压力仍在，企业利润修复节奏偏慢。',
+      id: 'unemployment_mid',
+      name: '失业率',
+      signal: '中性',
+      strength: 48,
+      summary: '城镇调查失业率维持在 5% 左右，就业市场整体稳定，但青年就业压力仍大。',
       quantData: [
-        { label: 'PPI 同比', value: '-1.2%', benchmark: '0%（通缩分界线）', trend: 'up', source: '国家统计局', date: '2026-01' },
+        { label: '城镇调查失业率', value: '5.1%', benchmark: '5.0%（政府目标）', trend: 'flat', source: '国家统计局', date: '2026-01' },
       ],
       weight: 3,
     },
@@ -153,11 +152,11 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
 
   'CN_宏观经济_long': [
     {
-      id: 'gdp_per_capita',
-      name: '人均 GDP',
+      id: 'gdp',
+      name: 'GDP增速',
       signal: '扩张',
       strength: 70,
-      summary: '中国人均 GDP 已突破 1.3 万美元，向高收入国家迈进，长期消费升级和产业升级逻辑确立。',
+      summary: '中国 GDP 长期增长中枢确立，人均 GDP 已突破 1.3 万美元，向高收入国家迈进，长期消费升级和产业升级逻辑确立。',
       quantData: [
         { label: '人均 GDP', value: '1.32万美元', benchmark: '1.28万（2024）', trend: 'up', source: '国家统计局', date: '2025' },
         { label: '城镇化率', value: '67.2%', benchmark: '56%（2015）', trend: 'up', source: '国家统计局', date: '2025' },
@@ -165,15 +164,15 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
       weight: 5,
     },
     {
-      id: 'rd_gdp_ratio',
-      name: '研发投入占 GDP 比重',
-      signal: '扩张',
-      strength: 68,
-      summary: '研发投入持续增加，科技自立自强战略推动长期全要素生产率提升，有利于经济潜在增速维持。',
+      id: 'unemployment_long',
+      name: '失业率',
+      signal: '中性',
+      strength: 55,
+      summary: '长期就业结构转型压力持续，但城镇化推进和产业升级将逐步吸纳就业，长期就业市场预期稳定。',
       quantData: [
-        { label: 'R&D/GDP', value: '2.65%', benchmark: '2.4%（2020）', trend: 'up', source: '国家统计局', date: '2025' },
+        { label: '城镇化率', value: '67.2%', benchmark: '75%（发达国家均值）', trend: 'up', source: '国家统计局', date: '2025' },
       ],
-      weight: 4,
+      weight: 3,
     },
   ],
 
@@ -184,7 +183,7 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
   'CN_流动性_short': [
     {
       id: 'm2_yoy',
-      name: 'M2 同比增速',
+      name: 'M2货币供应量',
       signal: '宽松',
       strength: 75,
       summary: 'M2 增速高于名义 GDP 增速，货币供应充裕，流动性环境整体宽松。',
@@ -194,13 +193,13 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
       weight: 5,
     },
     {
-      id: 'shibor_1m',
-      name: 'SHIBOR 1 个月',
+      id: 'dr',
+      name: '银行间流动性（DR001/DR007）',
       signal: '宽松',
       strength: 70,
       summary: '短期利率处于近 3 年低位，银行间市场资金面宽松，信贷扩张条件充分。',
       quantData: [
-        { label: 'SHIBOR 1M', value: '1.85%', benchmark: '2.5%（近3年均值）', trend: 'down', source: '上海银行间同业拆放利率', date: '2026-01' },
+        { label: 'SHIBOR 1M', value: '1.85%', benchmark: '2.5%（近3年均值）', trend: 'down', source: '中国人民银行', date: '2026-01' },
       ],
       weight: 4,
     },
@@ -219,8 +218,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
 
   'CN_流动性_mid': [
     {
-      id: 'lpr_1y',
-      name: 'LPR 1 年期',
+      id: 'lpr',
+      name: 'LPR（贷款市场报价利率）',
       signal: '偏松',
       strength: 65,
       summary: 'LPR 处于历史低位，实体经济融资成本下降，有利于中期信贷扩张和投资回升。',
@@ -230,8 +229,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
       weight: 5,
     },
     {
-      id: 'social_financing',
-      name: '社会融资规模存量同比',
+      id: 'socialfinance',
+      name: '社融数据（社会融资规模）',
       signal: '偏松',
       strength: 58,
       summary: '社融增速与名义 GDP 增速基本匹配，信用扩张节奏稳健，中期流动性无明显收紧风险。',
@@ -244,8 +243,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
 
   'CN_流动性_long': [
     {
-      id: 'reserve_ratio',
-      name: '存款准备金率',
+      id: 'bondyield',
+      name: '国债收益率',
       signal: '偏松',
       strength: 62,
       summary: '准备金率仍有下调空间（当前约 7%），长期货币政策工具箱充裕，流动性支撑有保障。',
@@ -262,8 +261,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
 
   'CN_政策与预期_short': [
     {
-      id: 'fiscal_deficit',
-      name: '财政赤字率',
+      id: 'fiscal',
+      name: '财政政策取向',
       signal: '积极',
       strength: 78,
       summary: '财政赤字率扩大至 4%，专项债发行提速，财政政策积极发力，短期对市场情绪形成正面催化。',
@@ -274,8 +273,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
       weight: 5,
     },
     {
-      id: 'policy_rate',
-      name: '政策利率（7天逆回购）',
+      id: 'lpr_short',
+      name: 'LPR（贷款市场报价利率）',
       signal: '积极',
       strength: 70,
       summary: '央行维持宽松基调，7 天逆回购利率处于历史低位，货币政策对经济的支撑信号明确。',
@@ -288,8 +287,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
 
   'CN_政策与预期_mid': [
     {
-      id: 'industrial_policy',
-      name: '产业政策力度',
+      id: 'industry',
+      name: '产业政策',
       signal: '积极',
       strength: 72,
       summary: '新质生产力、AI 产业、半导体等战略领域政策密集出台，中期产业政策红利持续释放。',
@@ -299,8 +298,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
       weight: 4,
     },
     {
-      id: 'geopolitical_risk',
-      name: '地缘政治风险',
+      id: 'exchange',
+      name: '汇率（人民币对美元）',
       signal: '中性偏消极',
       strength: 45,
       summary: '中美贸易摩擦仍存在不确定性，地缘风险对市场预期形成一定压制，需持续跟踪关税政策动向。',
@@ -331,8 +330,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
 
   'CN_市场估值情绪_short': [
     {
-      id: 'pe_csi300',
-      name: '沪深 300 PE（TTM）',
+      id: 'pe300',
+      name: '沪深300 PE（市盈率）',
       signal: '低估',
       strength: 80,
       summary: '沪深 300 PE 约 12 倍，低于近 10 年均值（约 14 倍），估值具有较高安全边际。',
@@ -343,7 +342,7 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
       weight: 5,
     },
     {
-      id: 'margin_balance',
+      id: 'margin',
       name: '融资余额',
       signal: '中性',
       strength: 50,
@@ -354,8 +353,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
       weight: 3,
     },
     {
-      id: 'vix_cn',
-      name: 'A 股波动率（VIX 类比）',
+      id: 'marginratio',
+      name: '两融余额占流通市值比',
       signal: '中性',
       strength: 52,
       summary: '市场隐含波动率处于正常区间，投资者情绪未出现极端恐慌或极端贪婪，短期情绪中性。',
@@ -368,8 +367,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
 
   'CN_市场估值情绪_mid': [
     {
-      id: 'pe_csi500',
-      name: '中证 500 PE（TTM）',
+      id: 'allpe',
+      name: '全A PE/PB',
       signal: '低估',
       strength: 75,
       summary: '中证 500 PE 约 22 倍，低于历史均值（约 30 倍），中小盘成长股估值修复空间较大。',
@@ -379,8 +378,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
       weight: 4,
     },
     {
-      id: 'dividend_yield',
-      name: 'A 股整体股息率',
+      id: 'stockbond',
+      name: '股债收益率差',
       signal: '低估',
       strength: 72,
       summary: 'A 股整体股息率约 2.8%，高于 10 年期国债收益率（约 2.1%），股债性价比偏向股票。',
@@ -394,8 +393,8 @@ export const MOCK_SUB_INDICATORS: Record<string, SubIndicator[]> = {
 
   'CN_市场估值情绪_long': [
     {
-      id: 'cape_ratio',
-      name: '周期调整市盈率（CAPE）',
+      id: 'allpe_long',
+      name: '全A PE/PB',
       signal: '低估',
       strength: 78,
       summary: 'A 股 CAPE 约 14 倍，处于全球主要市场最低分位，长期配置价值突出。',
