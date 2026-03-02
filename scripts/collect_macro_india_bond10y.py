@@ -65,37 +65,47 @@ INDIA_INDICATORS = {
 }
 
 # ─── bond_10y 名义收益率配置（FRED OECD 月度系列）────────────────────────────
-# 系列格式：IRLTLT01{CC}M156N，CC 为 ISO2 大写
-# US 使用 DGS10（日度，更完整）
+# 系列格式说明：
+#   - OECD 成员国：IRLTLT01{CC}M156N（CC 为 ISO2 大写），覆盖 US/JP/DE/FR/IT/AU/CA/KR/MX/ZA/EU/GB/CH/SE/NO/NZ
+#   - US 使用 DGS10（日度，更完整）
+#   - IN：INDIRLTLT01STM（OECD 合作国，月度，2011-12~至今）
+#   - BR：INTGSTBRM193N（IMF IFS 系列，月度，1996~至今）
+#   - CO：COLIRLTLT01STM（OECD 成员，月度，2003~至今）
+#   - CL：IRLTLT01CLM156N（OECD 成员，月度）
+#
+# ⚠️  以下国家 FRED 无数据（非 OECD 成员，IRLTLT01 系列不存在）：
+#   SG/TH/MY/ID/PH/PE — 已探索 FRED/IMF IFS/BIS/各国央行 API，均无法获取
+#   状态：BLOCKED（REQ-034 v3.0，2026-03-02）
 BOND10Y_FRED = {
-    "US": "DGS10",
-    "JP": "IRLTLT01JPM156N",
-    "DE": "IRLTLT01DEM156N",
-    "FR": "IRLTLT01FRM156N",
-    "IT": "IRLTLT01ITM156N",
-    "AU": "IRLTLT01AUM156N",
-    "CA": "IRLTLT01CAM156N",
-    "KR": "IRLTLT01KRM156N",
-    "MX": "IRLTLT01MXM156N",
-    "ZA": "IRLTLT01ZAM156N",
-    "EU": "IRLTLT01EZM156N",
-    "GB": "IRLTLT01GBM156N",
-    "CH": "IRLTLT01CHM156N",
-    "SE": "IRLTLT01SEM156N",
-    "NO": "IRLTLT01NOM156N",
-    "NZ": "IRLTLT01NZM156N",
-    "SG": "IRLTLT01SGM156N",
-    "TH": "IRLTLT01THM156N",
-    "MY": "IRLTLT01MYM156N",
-    "ID": "IRLTLT01IDM156N",
-    "PH": "IRLTLT01PHM156N",
-    "CL": "IRLTLT01CLM156N",
-    "CO": "IRLTLT01COM156N",
-    "PE": "IRLTLT01PEM156N",
-    "IN": "IRLTLT01INM156N",
-    "BR": "IRLTLT01BRM156N",
-    "CN": "IRLTLT01CNM156N",
-    "ZA": "IRLTLT01ZAM156N",
+    # ── 发达市场（OECD 成员，IRLTLT01 系列）──
+    "US": "DGS10",              # 日度，1962~至今
+    "JP": "IRLTLT01JPM156N",   # 月度，1989~至今
+    "DE": "IRLTLT01DEM156N",   # 月度，1956~至今
+    "FR": "IRLTLT01FRM156N",   # 月度，1960~至今
+    "IT": "IRLTLT01ITM156N",   # 月度，1991~至今
+    "AU": "IRLTLT01AUM156N",   # 月度，1969~至今
+    "CA": "IRLTLT01CAM156N",   # 月度，1955~至今
+    "KR": "IRLTLT01KRM156N",   # 月度，2000~至今
+    "MX": "IRLTLT01MXM156N",   # 月度，2001~至今
+    "ZA": "IRLTLT01ZAM156N",   # 月度，1957~至今
+    "EU": "IRLTLT01EZM156N",   # 月度，1970~至今
+    "GB": "IRLTLT01GBM156N",   # 月度，1960~至今
+    "CH": "IRLTLT01CHM156N",   # 月度，1955~至今
+    "SE": "IRLTLT01SEM156N",   # 月度，1986~至今
+    "NO": "IRLTLT01NOM156N",   # 月度，1985~至今
+    "NZ": "IRLTLT01NZM156N",   # 月度，1970~至今
+    "CL": "IRLTLT01CLM156N",   # 月度，2004~至今
+    # ── 新兴市场（有效系列，已验证）──
+    "IN": "INDIRLTLT01STM",    # 印度，月度，2011-12~至今，OECD 合作国
+    "BR": "INTGSTBRM193N",     # 巴西，月度，1996~至今，IMF IFS 系列
+    "CO": "COLIRLTLT01STM",    # 哥伦比亚，月度，2003~至今，OECD 成员
+    # ── 以下国家 FRED 无数据，已标注 BLOCKED ──
+    # "SG": None,  # 新加坡 — MAS API/FRED 均无法获取，待解决
+    # "TH": None,  # 泰国   — BOT API 需要爬虫，待解决
+    # "MY": None,  # 马来西亚 — BNM API 需要爬虫，待解决
+    # "ID": None,  # 印尼   — BI 官网无公开 API，待解决
+    # "PH": None,  # 菲律宾 — BSP API 需要爬虫，待解决
+    # "PE": None,  # 秘鲁   — BCRP API 需要爬虫，待解决
 }
 
 
