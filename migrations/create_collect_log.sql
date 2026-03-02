@@ -35,7 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_collect_log_status
 -- 状态值约束
 ALTER TABLE collect_log
     ADD CONSTRAINT chk_collect_log_status
-    CHECK (status IN ('complete', 'partial', 'failed'));
+    CHECK (status IN ('running', 'complete', 'partial', 'failed'));
 
 -- 注释
 COMMENT ON TABLE collect_log IS 'REQ-068 采集执行日志表：记录每次采集的实际结果，是所有采集行为的唯一事实来源';
