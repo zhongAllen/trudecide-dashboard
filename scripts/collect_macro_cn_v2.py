@@ -442,17 +442,15 @@ def fetch_dr007():
 
 
 def fetch_north_net_flow():
-    """北向资金净流入（历史）- AKShare 东方财富
+    """北向资金净流入（历史）- 已废弃，不再采集
     
-    ⚠️ 重要：2024-08-19 起监管停止披露北向资金日度净买入数据（REQ-039 v3.0）
-    因此本函数只采集 2024-08-18 及之前的历史数据，之后的数据截断不采集。
-    2024-08-19 后请使用 north_daily_turnover 和 north_turnover_ratio_daily 替代。
+    ⚠️ 策略决策（REQ-108）：2024-08-19 起监管停止披露北向资金日度净买入数据。
+    历史数据（2024-08-18 前）因数据口径与新制度不可比，决定不采集。
+    北向资金研究范围统一为 2024-08-19 至今，使用 north_daily_turnover 和
+    north_turnover_ratio_daily 两个指标（成交总额 + 占比），不再使用净买入。
+    本函数保留仅作历史记录，INDICATOR_MAP 中已移除此指标。
     """
-    df = ak.stock_hsgt_hist_em(symbol="北向资金")
-    # 截断：只保留 2024-08-18 及之前的数据
-    df['日期'] = pd.to_datetime(df['日期'])
-    df = df[df['日期'] <= pd.Timestamp('2024-08-18')]
-    return _rows("north_net_flow", df, "日期", "当日成交净买额")
+    return []  # 已废弃，不采集
 
 def fetch_north_daily_turnover():
     """北向当日成交总额 - Tushare moneyflow_hsgt
@@ -465,7 +463,8 @@ def fetch_north_daily_turnover():
     # 使用模块级 pro 对象（已在脚本顶部初始化）
     all_rows = []
     # 按年分批拉取（Tushare 单次限 1000 条）
-    for year in range(2014, pd.Timestamp.now().year + 1):
+    # 策略决策（REQ-108）：只研究 2024-08-19 至今，起始年份固定为 2024
+    for year in range(2024, pd.Timestamp.now().year + 1):
         start = f"{year}0101"
         end = f"{year}1231"
         try:
@@ -479,6 +478,9 @@ def fetch_north_daily_turnover():
                 try:
                     td = str(row['trade_date'])[:8]
                     td = f"{td[:4]}-{td[4:6]}-{td[6:8]}"
+                    # 只保留 2024-08-19 及之后的数据
+                    if td < '2024-08-19':
+                        continue
                     val = round(float(row['hgt_f']) + float(row['sgt_f']), 4)
                     all_rows.append({"indicator_id": "north_daily_turnover", "trade_date": td, "value": val})
                 except Exception:
@@ -521,7 +523,8 @@ def fetch_north_turnover_ratio_daily():
         return []
     
     all_rows = []
-    for year in range(2014, pd.Timestamp.now().year + 1):
+    # 策略决策（REQ-108）：只研究 2024-08-19 至今，起始年份固定为 2024
+    for year in range(2024, pd.Timestamp.now().year + 1):
         start = f"{year}0101"
         end = f"{year}1231"
         try:
@@ -535,6 +538,9 @@ def fetch_north_turnover_ratio_daily():
                 try:
                     td = str(row['trade_date'])[:8]
                     td = f"{td[:4]}-{td[4:6]}-{td[6:8]}"
+                    # 只保留 2024-08-19 及之后的数据
+                    if td < '2024-08-19':
+                        continue
                     north = float(row['hgt_f']) + float(row['sgt_f'])
                     total = total_amount.get(td, 0.0)
                     if total > 0:
@@ -632,7 +638,8 @@ INDICATOR_MAP = {
     "shibor_1w":            fetch_shibor_1w,
     "dr001":                fetch_dr001,
     "dr007":                fetch_dr007,
-    "north_net_flow":           fetch_north_net_flow,
+    # ⚠️ north_net_flow 已废弃（REQ-108）：2024-08-19 后净买入数据不再披露，历史数据口径不可比，不采集
+    # 北向资金研究范围统一为 2024-08-19 至今，使用以下两个指标：
     "north_daily_turnover":     fetch_north_daily_turnover,
     "north_turnover_ratio_daily": fetch_north_turnover_ratio_daily,
     "margin_balance_sh":    fetch_margin_balance_sh,
