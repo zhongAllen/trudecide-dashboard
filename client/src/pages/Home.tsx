@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import {
   ChevronDown, ChevronRight, TrendingUp, BarChart3, PieChart,
-  BookOpen, Loader2, AlertTriangle, HelpCircle, Globe
+  BookOpen, Loader2, AlertTriangle, HelpCircle, Globe, Database
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -385,12 +385,20 @@ export default function Home() {
             <span className="text-xs text-blue-200/70 font-mono tracking-wider">
               v{__APP_VERSION__}
             </span>
-            <Link href="/knowledge">
-              <button className="flex items-center gap-2 bg-white/15 hover:bg-white/25 border border-white/30 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
-                <BookOpen className="w-4 h-4" />
-                项目知识库
-              </button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href="/admin/data">
+                <button className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white/70 hover:text-white px-3 py-2 rounded-lg transition-all text-sm">
+                  <Database className="w-4 h-4" />
+                  数据后台
+                </button>
+              </Link>
+              <Link href="/knowledge">
+                <button className="flex items-center gap-2 bg-white/15 hover:bg-white/25 border border-white/30 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
+                  <BookOpen className="w-4 h-4" />
+                  项目知识库
+                </button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
