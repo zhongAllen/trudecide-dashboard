@@ -442,9 +442,109 @@ def fetch_dr007():
 
 
 def fetch_north_net_flow():
-    """北向资金净流入（历史）- AKShare 东方财富"""
+    """北向资金净流入（历史）- AKShare 东方财富
+    
+    ⚠️ 重要：2024-08-19 起监管停止披露北向资金日度净买入数据（REQ-039 v3.0）
+    因此本函数只采集 2024-08-18 及之前的历史数据，之后的数据截断不采集。
+    2024-08-19 后请使用 north_daily_turnover 和 north_turnover_ratio_daily 替代。
+    """
     df = ak.stock_hsgt_hist_em(symbol="北向资金")
+    # 截断：只保留 2024-08-18 及之前的数据
+    df['日期'] = pd.to_datetime(df['日期'])
+    df = df[df['日期'] <= pd.Timestamp('2024-08-18')]
     return _rows("north_net_flow", df, "日期", "当日成交净买额")
+
+def fetch_north_daily_turnover():
+    """北向当日成交总额 - Tushare moneyflow_hsgt
+    
+    计算方式：hgt（沪股通成交额）+ sgt（深股通成交额）
+    2024-08-19 起，north_money 字段语义已变更为成交总额，与 hgt+sgt 等价。
+    本函数直接用 hgt+sgt 计算，语义清晰，全时段连续可比（REQ-039 v3.0）。
+    时间范围：2014-11 ~ 至今
+    """
+    # 使用模块级 pro 对象（已在脚本顶部初始化）
+    all_rows = []
+    # 按年分批拉取（Tushare 单次限 1000 条）
+    for year in range(2014, pd.Timestamp.now().year + 1):
+        start = f"{year}0101"
+        end = f"{year}1231"
+        try:
+            df = pro.moneyflow_hsgt(start_date=start, end_date=end)
+            if df is None or df.empty:
+                continue
+            # Tushare 返回的 hgt/sgt 是 object 字符串类型，用 pd.to_numeric 安全转换
+            df['hgt_f'] = pd.to_numeric(df['hgt'], errors='coerce').fillna(0.0)
+            df['sgt_f'] = pd.to_numeric(df['sgt'], errors='coerce').fillna(0.0)
+            for _, row in df.iterrows():
+                try:
+                    td = str(row['trade_date'])[:8]
+                    td = f"{td[:4]}-{td[4:6]}-{td[6:8]}"
+                    val = round(float(row['hgt_f']) + float(row['sgt_f']), 4)
+                    all_rows.append({"indicator_id": "north_daily_turnover", "trade_date": td, "value": val})
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.warning(f"north_daily_turnover {year} 采集失败: {e}")
+    return all_rows
+
+def fetch_north_turnover_ratio_daily():
+    """北向成交额占全A股成交额比例（日度）- Tushare
+    
+    计算公式：(hgt + sgt) / 全A成交额
+    全A成交额 = 上证指数日成交额 + 深证成指日成交额（来自 index_daily 表）
+    时间范围：2014-11 ~ 至今（REQ-039 v3.0）
+    """
+    # 使用模块级 pro/sb 对象（已在脚本顶部初始化）
+    
+    # 从数据库读取全A成交额（上证+深证）
+    from collections import defaultdict
+    total_amount = defaultdict(float)
+    try:
+        # 分批读取（Supabase 单次最多 1000 行，index_daily 数据量大）
+        offset = 0
+        batch_size = 1000
+        while True:
+            r = sb.table('index_daily').select('trade_date,amount') \
+                .in_('ts_code', ['000001.SH', '399001.SZ']) \
+                .range(offset, offset + batch_size - 1).execute()
+            if not r.data:
+                break
+            for row in r.data:
+                td = str(row['trade_date'])[:10]
+                amt = float(row['amount']) if row['amount'] else 0.0
+                total_amount[td] += amt / 10000  # 万元 → 亿元
+            if len(r.data) < batch_size:
+                break
+            offset += batch_size
+    except Exception as e:
+        logger.warning(f"north_turnover_ratio_daily: 无法获取全A成交额数据 - {e}")
+        return []
+    
+    all_rows = []
+    for year in range(2014, pd.Timestamp.now().year + 1):
+        start = f"{year}0101"
+        end = f"{year}1231"
+        try:
+            df = pro.moneyflow_hsgt(start_date=start, end_date=end)
+            if df is None or df.empty:
+                continue
+            # Tushare 返回的 hgt/sgt 是 object 字符串类型，用 pd.to_numeric 安全转换
+            df['hgt_f'] = pd.to_numeric(df['hgt'], errors='coerce').fillna(0.0)
+            df['sgt_f'] = pd.to_numeric(df['sgt'], errors='coerce').fillna(0.0)
+            for _, row in df.iterrows():
+                try:
+                    td = str(row['trade_date'])[:8]
+                    td = f"{td[:4]}-{td[4:6]}-{td[6:8]}"
+                    north = float(row['hgt_f']) + float(row['sgt_f'])
+                    total = total_amount.get(td, 0.0)
+                    if total > 0:
+                        ratio = round(north / total * 100, 4)  # 百分比
+                        all_rows.append({"indicator_id": "north_turnover_ratio_daily", "trade_date": td, "value": ratio})
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.warning(f"north_turnover_ratio_daily {year} 采集失败: {e}")
+    return all_rows
 
 
 def fetch_margin_balance_sh():
@@ -532,7 +632,9 @@ INDICATOR_MAP = {
     "shibor_1w":            fetch_shibor_1w,
     "dr001":                fetch_dr001,
     "dr007":                fetch_dr007,
-    "north_net_flow":       fetch_north_net_flow,
+    "north_net_flow":           fetch_north_net_flow,
+    "north_daily_turnover":     fetch_north_daily_turnover,
+    "north_turnover_ratio_daily": fetch_north_turnover_ratio_daily,
     "margin_balance_sh":    fetch_margin_balance_sh,
     "margin_balance_sz":    fetch_margin_balance_sz,
     "all_a_pb":             fetch_all_a_pb,

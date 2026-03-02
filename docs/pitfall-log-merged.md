@@ -364,3 +364,76 @@ sudo kill -9 $(sudo lsof -t -i:3000) && cd /home/ubuntu/stock-dashboard && pnpm 
   > **规则 13-2**: 表结构设计（DDL）与业务逻辑代码（如 `collect_helper.py`）必须**同步评审**。只评审其一，极易出现此类不一致问题。
   > **规则 13-3**: 新增或修改 CHECK 约束后，必须编写单元测试或集成测试，覆盖所有允许值和至少一个非法值，确保约束按预期工作。
 - **关联任务**: REQ-068 采集治理框架
+
+---
+## 14. CONFLICT_COLS 与实际数据库约束不匹配导致 UPSERT 全部失败
+- **严重程度**: ⭐⭐⭐⭐⭐
+- **触发场景**: REQ-091 collect_macro_cn_v2.py 全量采集时，旧版脚本（PID 187688）使用了错误的冲突键。
+- **现象**: 所有指标的 upsert 操作均报错 `there is no unique or exclusion constraint matching the ON CONFLICT specification`（PostgreSQL 错误码 42P10），数据全部写入失败。
+- **根本原因**: `indicator_values` 表的实际 PRIMARY KEY 是 `(indicator_id, region, trade_date, revision_seq)` 四列，但旧版脚本的 `on_conflict` 参数只写了 `indicator_id,trade_date` 两列，与实际约束不匹配。
+- **错误代码 (v1)**:
+  ```python
+  # ❌ 错误：只写了两列，与数据库实际 PK 不匹配
+  sb.table("indicator_values").upsert(batch, on_conflict="indicator_id,trade_date").execute()
+  ```
+- **正确代码 (v2)**:
+  ```python
+  # ✅ 正确：四列完整匹配数据库 PK
+  sb.table("indicator_values").upsert(batch, on_conflict="indicator_id,region,trade_date,revision_seq").execute()
+  ```
+- **核心教训与预防规则**:
+  > **规则 14-1**: 写 UPSERT 前，**必须先查询数据库实际约束**，不得凭记忆或假设填写 `on_conflict` 列。
+  > **规则 14-2**: 每次修改表结构（如新增 PK 列）后，**必须同步更新所有相关脚本中的 `CONFLICT_COLS`**。
+  > **规则 14-3**: 采集脚本启动后，**必须检查前几条日志**确认写入成功（HTTP 200），而非仅检查进程是否存活。
+- **关联任务**: REQ-091, REQ-108
+
+---
+## 15. Tushare API 返回 object（字符串）类型导致数值运算错误
+- **严重程度**: ⭐⭐⭐
+- **触发场景**: REQ-108 修复 collect_macro_cn_v2.py 北向资金指标时，调试 `fetch_north_daily_turnover` 函数。
+- **现象**: `hgt + sgt` 的计算结果是字符串拼接（如 `83528.7393803.85`）而非数值相加（如 `177332.58`），导致 `float()` 转换后数值异常。
+- **根本原因**: Tushare `pro.moneyflow_hsgt()` 返回的 DataFrame 中，`hgt`、`sgt`、`north_money` 等数值列的 dtype 是 `object`（字符串），而非 `float64`。
+- **错误代码**:
+  ```python
+  # ❌ 错误：pd.notna() 对字符串不可靠，且 hgt+sgt 可能字符串拼接
+  hgt = float(row['hgt']) if pd.notna(row['hgt']) else 0.0
+  sgt = float(row['sgt']) if pd.notna(row['sgt']) else 0.0
+  val = hgt + sgt
+  ```
+- **正确代码**:
+  ```python
+  # ✅ 正确：在 iterrows 前先用 pd.to_numeric 批量转换整列
+  df['hgt_f'] = pd.to_numeric(df['hgt'], errors='coerce').fillna(0.0)
+  df['sgt_f'] = pd.to_numeric(df['sgt'], errors='coerce').fillna(0.0)
+  for _, row in df.iterrows():
+      val = round(float(row['hgt_f']) + float(row['sgt_f']), 4)
+  ```
+- **核心教训与预防规则**:
+  > **规则 15-1**: 使用 Tushare 数据时，**不能假设数值列是 float 类型**。必须先用 `df.dtypes` 验证，或统一用 `pd.to_numeric(col, errors='coerce')` 转换。
+  > **规则 15-2**: 在 `iterrows()` 前对整列做类型转换，比在循环内逐行转换更高效、更安全。
+  > **规则 15-3**: 调试数值计算时，**先打印 `df.dtypes` 和前几行**，确认数据类型符合预期。
+- **关联任务**: REQ-108
+
+---
+## 14. CONFLICT_COLS 与实际数据库约束不匹配导致 UPSERT 全部失败
+- **严重程度**: ⭐⭐⭐⭐⭐
+- **触发场景**: REQ-108 collect_macro_cn_v2.py 全量采集时，旧版脚本使用了错误的冲突键。
+- **现象**: 所有指标的 upsert 操作均报错 there is no unique or exclusion constraint matching the ON CONFLICT specification（PostgreSQL 错误码 42P10），数据全部写入失败。
+- **根本原因**: indicator_values 表的实际 PRIMARY KEY 是 (indicator_id, region, trade_date, revision_seq) 四列，但旧版脚本的 on_conflict 参数只写了 indicator_id,trade_date 两列，与实际约束不匹配。
+- **核心教训与预防规则**:
+  > **规则 14-1**: 写 UPSERT 前，**必须先查询数据库实际约束**，不得凭记忆或假设填写 on_conflict 列。
+  > **规则 14-2**: 每次修改表结构（如新增 PK 列）后，**必须同步更新所有相关脚本中的 CONFLICT_COLS**。
+  > **规则 14-3**: 采集脚本启动后，**必须检查前几条日志**确认写入成功（HTTP 200），而非仅检查进程是否存活。
+- **关联任务**: REQ-108
+
+---
+## 15. Tushare API 返回 object（字符串）类型导致数值运算错误
+- **严重程度**: ⭐⭐⭐
+- **触发场景**: REQ-108 修复 collect_macro_cn_v2.py 北向资金指标时，调试 fetch_north_daily_turnover 函数。
+- **现象**: hgt + sgt 的计算结果是字符串拼接（如 83528.7393803.85）而非数值相加（如 177332.58）。
+- **根本原因**: Tushare pro.moneyflow_hsgt() 返回的 DataFrame 中，hgt、sgt 等数值列的 dtype 是 object（字符串），而非 float64。
+- **核心教训与预防规则**:
+  > **规则 15-1**: 使用 Tushare 数据时，**不能假设数值列是 float 类型**。必须先用 df.dtypes 验证，或统一用 pd.to_numeric(col, errors=coerce) 转换。
+  > **规则 15-2**: 在 iterrows() 前对整列做类型转换，比在循环内逐行转换更高效、更安全。
+  > **规则 15-3**: 调试数值计算时，**先打印 df.dtypes 和前几行**，确认数据类型符合预期。
+- **关联任务**: REQ-108
