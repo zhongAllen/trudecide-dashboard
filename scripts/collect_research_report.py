@@ -66,7 +66,7 @@ def retry_call(fn, retries=RETRY_TIMES, sleep_sec=RETRY_SLEEP, **kwargs):
         except Exception as e:
             err_str = str(e)
             # 遇到每日调用限制，直接抛出，不重试
-            if '每天最多访问' in err_str or '次' in err_str:
+            if '每天最多访问' in err_str or '每天最多' in err_str:
                 raise RuntimeError(f"DAILY_LIMIT: {err_str}")
             print(f"  ⚠️  第{i+1}次失败: {err_str}")
             if i < retries - 1:
@@ -129,7 +129,9 @@ def save_progress(progress: dict):
         json.dump(progress, f, ensure_ascii=False, indent=2)
 
 def today_str() -> str:
-    return datetime.now().strftime('%Y-%m-%d')
+    """使用北京时间（UTC+8）判断日期，与 Tushare 接口限额重置时间一致"""
+    beijing_now = datetime.now(timezone.utc) + timedelta(hours=8)
+    return beijing_now.strftime('%Y-%m-%d')
 
 # ── 核心采集逻辑 ──────────────────────────────────────────────────────────────
 def collect_period(pro, start_date: str, end_date: str, dry_run: bool = False) -> dict:
