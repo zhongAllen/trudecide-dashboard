@@ -1,15 +1,14 @@
 /**
  * DataAdmin.tsx — 数据采集管理后台
  *
- * REQ-135: 动态化改造
- *   - 数据源配置从 Supabase collect_target 表动态加载（不再硬编码）
- *   - 新增数据源只需在 collect_target 表插入记录，刷新即生效
- *   - 保留原有 UI 结构：分组卡片 / 进度条 / 状态徽章 / 汇总统计
+ * REQ-135: 动态化改造（数据源配置从 collect_target 表加载）
+ * REQ-037 v2.0: 三维数据质量展示（及时性 T / 完整性 C / 准确性 A）
  *
  * 架构：
- *   - collect_target 表提供分组/标签/表名/日期字段/目标量等元数据
+ *   - collect_target 表提供分组/标签/表名/日期字段/目标量/质量状态等元数据
  *   - pg_stat_user_tables RPC 高效获取行数（无超时风险）
- *   - 并发查询各表最新日期
+ *   - quality_status / quality_summary 字段由 run_all_sources_check.py 定期写入
+ *   - 三维质量圆点：T（及时性）C（完整性）A（准确性）
  */
 import { useState, useEffect, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
@@ -18,10 +17,10 @@ import {
   ArrowLeft, RefreshCw, Database, CheckCircle2, AlertTriangle,
   XCircle, Clock, TrendingUp, FileText, BarChart3, Newspaper,
   BookOpen, Globe, ChevronDown, ChevronRight, Info, Calendar,
-  Users, AlertCircle
+  Users, AlertCircle, ShieldCheck
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // ── Supabase 连接 ──────────────────────────────────────────────────────────────
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL  as string;
@@ -33,6 +32,22 @@ const SUPA_HEADERS = {
 };
 
 // ── 类型定义 ───────────────────────────────────────────────────────────────────
+interface QualityDim {
+  status: 'ok' | 'warning' | 'error' | 'unknown';
+  issues: Array<{ level: string; rule: string; message: string }>;
+}
+
+interface QualitySummary {
+  checked_at?: string;
+  row_count?: number;
+  latest_date?: string;
+  timeliness?: QualityDim;
+  completeness?: QualityDim;
+  accuracy?: QualityDim;
+  error_count?: number;
+  warning_count?: number;
+}
+
 interface CollectTargetRow {
   id: number;
   module: string;
@@ -48,6 +63,9 @@ interface CollectTargetRow {
   schedule_desc: string | null;
   is_active: boolean;
   note: string | null;
+  quality_status: 'ok' | 'warning' | 'error' | 'unknown' | null;
+  last_checked_at: string | null;
+  quality_summary: QualitySummary | null;
 }
 
 interface DataSource {
@@ -62,6 +80,9 @@ interface DataSource {
   reqId?: string;
   staleThresholdDays?: number;
   notes?: string;
+  qualityStatus: 'ok' | 'warning' | 'error' | 'unknown';
+  lastCheckedAt: string | null;
+  qualitySummary: QualitySummary | null;
 }
 
 interface DataGroup {
@@ -97,10 +118,18 @@ const DEFAULT_GROUP_STYLE = {
   bgColor: 'bg-gray-50',
 };
 
+// ── 三维质量圆点颜色 ───────────────────────────────────────────────────────────
+const DIM_DOT_COLOR: Record<string, string> = {
+  ok:      'bg-emerald-500',
+  warning: 'bg-amber-400',
+  error:   'bg-red-500',
+  unknown: 'bg-gray-300',
+};
+
 // ── 从 collect_target 加载数据源配置 ──────────────────────────────────────────
 async function fetchDataGroups(): Promise<DataGroup[]> {
   const resp = await fetch(
-    `${SUPABASE_URL}/rest/v1/collect_target?is_active=eq.true&order=group_id,id`,
+    `${SUPABASE_URL}/rest/v1/collect_target?is_active=eq.true&order=group_id,id&select=*`,
     { headers: SUPA_HEADERS }
   );
   if (!resp.ok) throw new Error(`fetch collect_target failed: ${resp.status}`);
@@ -135,6 +164,9 @@ async function fetchDataGroups(): Promise<DataGroup[]> {
       reqId: row.req_id ?? undefined,
       staleThresholdDays,
       notes: row.note ?? undefined,
+      qualityStatus: row.quality_status ?? 'unknown',
+      lastCheckedAt: row.last_checked_at ?? null,
+      qualitySummary: row.quality_summary ?? null,
     });
   });
 
@@ -201,6 +233,80 @@ function calcProgress(count: number | null, target?: number): number | null {
   return Math.min(100, Math.round((count / target) * 100));
 }
 
+// ── 三维质量圆点组件 ───────────────────────────────────────────────────────────
+function QualityDots({ source }: { source: DataSource }) {
+  const summary = source.qualitySummary;
+  if (!summary) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+        <span className="w-2 h-2 rounded-full bg-gray-200 inline-block" title="未检查" />
+        <span className="w-2 h-2 rounded-full bg-gray-200 inline-block" title="未检查" />
+        <span className="w-2 h-2 rounded-full bg-gray-200 inline-block" title="未检查" />
+      </span>
+    );
+  }
+
+  const dims: Array<{ key: keyof QualitySummary; label: string; abbr: string }> = [
+    { key: 'timeliness',   label: '及时性', abbr: 'T' },
+    { key: 'completeness', label: '完整性', abbr: 'C' },
+    { key: 'accuracy',     label: '准确性', abbr: 'A' },
+  ];
+
+  const checkedAt = summary.checked_at
+    ? new Date(summary.checked_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '未知';
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {dims.map(({ key, label, abbr }) => {
+        const dim = summary[key] as QualityDim | undefined;
+        const st = dim?.status ?? 'unknown';
+        const issues = dim?.issues ?? [];
+        const dotColor = DIM_DOT_COLOR[st] ?? 'bg-gray-300';
+        const issueText = issues.length > 0
+          ? issues.map(i => i.message).join('\n')
+          : '无问题';
+
+        return (
+          <Tooltip key={key}>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center gap-0.5 cursor-default">
+                <span className={`w-2 h-2 rounded-full ${dotColor} inline-block`} />
+                <span className="text-xs text-gray-400 font-mono leading-none">{abbr}</span>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs text-xs">
+              <div className="font-semibold mb-1">{label}（{abbr}）— {st.toUpperCase()}</div>
+              <div className="whitespace-pre-wrap text-gray-300">{issueText}</div>
+              <div className="text-gray-500 mt-1">检查时间：{checkedAt}</div>
+            </TooltipContent>
+          </Tooltip>
+        );
+      })}
+    </span>
+  );
+}
+
+// ── 综合质量徽章 ───────────────────────────────────────────────────────────────
+function QualityBadge({ status }: { status: DataSource['qualityStatus'] }) {
+  if (status === 'ok') return (
+    <span className="inline-flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+      <ShieldCheck className="w-3 h-3" /> 质量正常
+    </span>
+  );
+  if (status === 'warning') return (
+    <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full">
+      <AlertTriangle className="w-3 h-3" /> 质量警告
+    </span>
+  );
+  if (status === 'error') return (
+    <span className="inline-flex items-center gap-1 text-xs text-red-700 bg-red-50 px-1.5 py-0.5 rounded-full">
+      <XCircle className="w-3 h-3" /> 质量异常
+    </span>
+  );
+  return null;
+}
+
 // ── 状态徽章 ───────────────────────────────────────────────────────────────────
 function StatusBadge({ status, count }: { status: TableStat['status']; count: number | null }) {
   if (status === 'loading') return (
@@ -256,6 +362,10 @@ function DataSourceRow({ source, stat }: { source: DataSource; stat: TableStat }
             <span className="text-sm font-medium text-gray-900">{source.label}</span>
             {source.reqId && <span className="text-xs text-gray-400 font-mono">{source.reqId}</span>}
             <StatusBadge status={stat.status} count={stat.count} />
+            {/* 质量异常时额外显示质量徽章 */}
+            {(source.qualityStatus === 'error' || source.qualityStatus === 'warning') && (
+              <QualityBadge status={source.qualityStatus} />
+            )}
           </div>
           <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{source.description}</p>
           {source.notes && <p className="text-xs text-blue-600 mt-0.5 italic">{source.notes}</p>}
@@ -283,6 +393,8 @@ function DataSourceRow({ source, stat }: { source: DataSource; stat: TableStat }
         {source.scheduleDesc && (
           <span className="text-xs text-gray-400">🕐 {source.scheduleDesc}</span>
         )}
+        {/* 三维质量圆点 */}
+        <QualityDots source={source} />
       </div>
     </div>
   );
@@ -301,6 +413,9 @@ function GroupCard({ group, stats, defaultOpen = true }: {
   const totalError = groupStats.filter((s) => s.status === 'error' || s.count === -1).length;
   const totalStale = groupStats.filter((s) => s.status === 'stale').length;
   const totalRows  = groupStats.reduce((sum, s) => sum + (s.count && s.count > 0 ? s.count : 0), 0);
+  // 质量告警统计
+  const qualityErrors   = group.sources.filter((s) => s.qualityStatus === 'error').length;
+  const qualityWarnings = group.sources.filter((s) => s.qualityStatus === 'warning').length;
 
   return (
     <Card className="overflow-hidden border-gray-200 shadow-sm">
@@ -318,7 +433,9 @@ function GroupCard({ group, stats, defaultOpen = true }: {
               {totalError > 0 && <span className="text-xs text-red-700 bg-red-50 px-1.5 py-0.5 rounded">{totalError} 缺失</span>}
               {totalEmpty > 0 && <span className="text-xs text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">{totalEmpty} 空表</span>}
               {totalStale > 0 && <span className="text-xs text-orange-700 bg-orange-50 px-1.5 py-0.5 rounded">{totalStale} 陈旧</span>}
-              {totalOk === group.sources.length && totalOk > 0 && (
+              {qualityErrors > 0 && <span className="text-xs text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-200">{qualityErrors} 质量异常</span>}
+              {qualityWarnings > 0 && <span className="text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200">{qualityWarnings} 质量警告</span>}
+              {totalOk === group.sources.length && totalOk > 0 && qualityErrors === 0 && qualityWarnings === 0 && (
                 <span className="text-xs text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">全部正常</span>
               )}
               {open ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
@@ -352,12 +469,32 @@ function SummaryCards({ groups, stats }: { groups: DataGroup[]; stats: Record<st
   const stale      = loaded.filter((s) => s.status === 'stale').length;
   const totalRows  = loaded.reduce((sum, s) => sum + (s.count && s.count > 0 ? s.count : 0), 0);
   const healthPct  = loaded.length > 0 ? Math.round((ok / loaded.length) * 100) : 0;
+  // 质量统计
+  const qualityErrors   = allSources.filter((s) => s.qualityStatus === 'error').length;
+  const qualityWarnings = allSources.filter((s) => s.qualityStatus === 'warning').length;
+  const qualityOk       = allSources.filter((s) => s.qualityStatus === 'ok').length;
+  const qualityChecked  = allSources.filter((s) => s.qualityStatus !== 'unknown').length;
 
   const cards = [
-    { label: '总数据量', value: totalRows > 0 ? totalRows.toLocaleString('zh-CN') : '—', sub: `${allSources.length} 个数据源`, icon: <Database className="w-5 h-5 text-blue-500" />, bg: 'bg-blue-50' },
-    { label: '正常',     value: String(ok),           sub: `${healthPct}% 健康率`,          icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />, bg: 'bg-emerald-50' },
-    { label: '空表',     value: String(empty),         sub: '需要采集',                      icon: <AlertTriangle className="w-5 h-5 text-amber-500" />, bg: 'bg-amber-50' },
-    { label: '表缺失/陈旧', value: String(error + stale), sub: `${error} 缺失 · ${stale} 陈旧`, icon: <XCircle className="w-5 h-5 text-red-500" />, bg: 'bg-red-50' },
+    {
+      label: '总数据量', value: totalRows > 0 ? totalRows.toLocaleString('zh-CN') : '—',
+      sub: `${allSources.length} 个数据源`, icon: <Database className="w-5 h-5 text-blue-500" />, bg: 'bg-blue-50'
+    },
+    {
+      label: '数据正常', value: String(ok),
+      sub: `${healthPct}% 健康率`, icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />, bg: 'bg-emerald-50'
+    },
+    {
+      label: '空表/缺失/陈旧', value: String(empty + error + stale),
+      sub: `${error} 缺失 · ${empty} 空表 · ${stale} 陈旧`, icon: <XCircle className="w-5 h-5 text-red-500" />, bg: 'bg-red-50'
+    },
+    {
+      label: '质量检查',
+      value: qualityChecked > 0 ? `${qualityOk}/${qualityChecked}` : '—',
+      sub: qualityErrors > 0 ? `${qualityErrors} 异常 · ${qualityWarnings} 警告` : qualityWarnings > 0 ? `${qualityWarnings} 警告` : '全部正常',
+      icon: <ShieldCheck className="w-5 h-5 text-violet-500" />,
+      bg: qualityErrors > 0 ? 'bg-red-50' : qualityWarnings > 0 ? 'bg-amber-50' : 'bg-violet-50'
+    },
   ];
 
   return (
@@ -389,7 +526,7 @@ export default function DataAdmin() {
     setLoading(true);
     setConfigError(null);
     try {
-      // 1. 从 collect_target 动态加载数据源配置
+      // 1. 从 collect_target 动态加载数据源配置（含质量字段）
       setConfigLoading(true);
       const loadedGroups = await fetchDataGroups();
       setGroups(loadedGroups);
@@ -501,6 +638,7 @@ export default function DataAdmin() {
               本页面实时查询 Supabase 数据库，展示所有数据采集目标的当前状态。
               行数通过 <code className="font-mono text-xs bg-blue-100 px-1 rounded">pg_stat_user_tables</code> 统计视图获取（估算值，误差 &lt;1%）。
               数据源配置由 <code className="font-mono text-xs bg-blue-100 px-1 rounded">collect_target</code> 表驱动，新增采集脚本后在该表登记即可自动显示。
+              三维质量标签（<span className="font-mono">T</span> 及时性 / <span className="font-mono">C</span> 完整性 / <span className="font-mono">A</span> 准确性）由定期检查脚本写入，鼠标悬停可查看详情。
             </div>
           </div>
 
@@ -527,6 +665,7 @@ export default function DataAdmin() {
 
           <div className="mt-6 text-xs text-gray-400 text-center">
             数据来源：Supabase · 配置中心：collect_target 表 · 采集脚本：scripts/ · 行数统计：pg_stat_user_tables（估算）
+            · 质量检查：run_all_sources_check.py（REQ-037）
           </div>
         </main>
       </div>
