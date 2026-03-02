@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import {
   ChevronDown, ChevronRight, TrendingUp, BarChart3, PieChart,
-  BookOpen, Loader2, AlertTriangle, HelpCircle, Globe, Database
+  BookOpen, Loader2, AlertTriangle, HelpCircle, Globe, Database, Layers
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -386,6 +386,12 @@ export default function Home() {
               v{__APP_VERSION__}
             </span>
             <div className="flex items-center gap-2">
+              <Link href="/topdown">
+                <button className="flex items-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 hover:text-amber-100 px-3 py-2 rounded-lg transition-all text-sm font-medium">
+                  <Layers className="w-4 h-4" />
+                  Top-Down 选股
+                </button>
+              </Link>
               <Link href="/admin/data">
                 <button className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white/70 hover:text-white px-3 py-2 rounded-lg transition-all text-sm">
                   <Database className="w-4 h-4" />

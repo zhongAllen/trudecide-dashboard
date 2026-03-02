@@ -8,6 +8,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import TopDown from "./pages/TopDown";
 
 
 
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/knowledge" component={Knowledge} />
       <Route path="/knowledge/:id" component={Knowledge} />
       <Route path="/admin/data" component={DataAdmin} />
+      <Route path="/topdown" component={TopDown} />
       <Route path="/404" component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
