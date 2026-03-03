@@ -1441,3 +1441,305 @@ export const MACRO_SIGNALS: MacroSignal[] = [
     indicators: ['north_net_flow', 'rmb_usd'],
   },
 ];
+
+// ─── REQ-144: 宏观→板块映射规则（sector_macro_mapping 表 Mock）─────────────────
+// 规则写死，执行逻辑硬编码，保证输出一致性
+// 字段说明：
+//   sector_name: 板块名称（匹配 SECTOR_META_LIST.name_cn）
+//   short_benefit: 短期受益程度（'强受益'|'受益'|'中性'|'规避'）
+//   mid_benefit: 中期受益程度
+//   short_reason: 短期受益定性说明
+//   mid_reason: 中期受益定性说明
+//   macro_drivers: 驱动该板块的宏观因子（对应 indicator_meta.id）
+//   logic: 受益逻辑说明（硬编码，可配置）
+
+export type BenefitLevel = '强受益' | '受益' | '中性' | '规避';
+
+export interface SectorMacroMapping {
+  sector_name: string;
+  short_benefit: BenefitLevel;
+  mid_benefit: BenefitLevel;
+  short_reason: string;
+  mid_reason: string;
+  macro_drivers: string[];
+  logic: string;
+}
+
+// 当前宏观底色（来自 MACRO_MATRIX_CN.summary）：
+//   短期：复苏（70分）— 经济扩张+流动性宽松+政策发力
+//   中期：复苏（68分）— 复苏路径确立，节奏存在不确定性
+export const SECTOR_MACRO_MAPPING: SectorMacroMapping[] = [
+  // ── 金融板块 ──────────────────────────────────────────────────────────────
+  {
+    sector_name: '银行',
+    short_benefit: '受益',
+    mid_benefit: '受益',
+    short_reason: '宽松货币政策下净息差压力缓解，社融扩张带动信贷需求回升',
+    mid_reason: '经济复苏周期中不良贷款率改善，资产质量提升，估值修复空间大',
+    macro_drivers: ['lpr_1y', 'social_finance_new', 'new_loans', 'm2_yoy'],
+    logic: '货币宽松（LPR下行）→ 信贷扩张 → 银行营收改善；经济复苏 → 不良率下降 → 估值修复',
+  },
+  {
+    sector_name: '证券',
+    short_benefit: '强受益',
+    mid_benefit: '受益',
+    short_reason: '市场成交量放大，北向资金回流，券商经纪/自营双线受益',
+    mid_reason: '资本市场改革深化，注册制推进，投行业务持续扩张',
+    macro_drivers: ['total_market_turnover', 'north_net_flow', 'hs300_pe'],
+    logic: '流动性宽松 → 市场活跃度提升 → 成交量放大 → 券商经纪收入增长',
+  },
+  {
+    sector_name: '保险',
+    short_benefit: '中性',
+    mid_benefit: '受益',
+    short_reason: '利率下行压制险资投资收益，但负债端新单保费增长良好',
+    mid_reason: '中期利率企稳后险资收益改善，居民财富管理需求推动保险渗透率提升',
+    macro_drivers: ['bond_10y', 'lpr_5y', 'retail_yoy'],
+    logic: '利率走势是核心变量：短期利率下行压制投资端；中期经济复苏带动居民收入增长，保险需求扩张',
+  },
+  // ── 科技/电子板块 ─────────────────────────────────────────────────────────
+  {
+    sector_name: '半导体',
+    short_benefit: '受益',
+    mid_benefit: '强受益',
+    short_reason: '国产替代政策持续，AI算力需求爆发，半导体景气度回升',
+    mid_reason: '全球半导体周期上行，中国自主可控战略推进，中期成长逻辑强劲',
+    macro_drivers: ['industrial_yoy', 'fai_yoy'],
+    logic: '政策（国产替代）+ 景气周期（AI算力需求）双轮驱动，与宏观复苏正相关',
+  },
+  {
+    sector_name: '软件开发',
+    short_benefit: '受益',
+    mid_benefit: '受益',
+    short_reason: 'AI大模型应用落地加速，政企数字化转型需求释放',
+    mid_reason: '数字经济政策持续支持，SaaS渗透率提升，中期成长确定性强',
+    macro_drivers: ['fai_yoy', 'industrial_yoy'],
+    logic: '政策驱动（数字中国）+ AI技术红利，受宏观周期影响较小，成长属性强',
+  },
+  // ── 新能源板块 ────────────────────────────────────────────────────────────
+  {
+    sector_name: '光伏设备',
+    short_benefit: '中性',
+    mid_benefit: '受益',
+    short_reason: '行业产能过剩压制短期盈利，但政策补贴和出口需求提供支撑',
+    mid_reason: '全球能源转型大趋势不变，中期需求端海外市场开拓带动出口增长',
+    macro_drivers: ['export_yoy', 'fai_yoy', 'ppi_yoy'],
+    logic: '短期供给过剩是主要矛盾；中期全球绿色转型需求+海外市场扩张是核心逻辑',
+  },
+  {
+    sector_name: '电池',
+    short_benefit: '中性',
+    mid_benefit: '受益',
+    short_reason: '锂价下跌压制上游，但整车销量回升带动动力电池需求',
+    mid_reason: '储能市场爆发，固态电池技术突破预期，中期成长逻辑清晰',
+    macro_drivers: ['retail_yoy', 'export_yoy'],
+    logic: '汽车消费（retail_yoy）+ 出口（export_yoy）是短期需求驱动；储能是中期增量',
+  },
+  // ── 消费板块 ──────────────────────────────────────────────────────────────
+  {
+    sector_name: '白酒',
+    short_benefit: '受益',
+    mid_benefit: '受益',
+    short_reason: '消费复苏信号明确，社零增速回升，高端白酒需求韧性强',
+    mid_reason: '居民收入增长支撑消费升级，白酒品牌集中度持续提升',
+    macro_drivers: ['retail_yoy', 'gdp_yoy', 'unemployment_rate'],
+    logic: '经济复苏（GDP+社零）→ 居民消费意愿提升 → 白酒需求回暖，与宏观复苏高度正相关',
+  },
+  {
+    sector_name: '汽车整车',
+    short_benefit: '受益',
+    mid_benefit: '受益',
+    short_reason: '以旧换新政策持续，新能源汽车渗透率提升，消费信心回升',
+    mid_reason: '自主品牌出海加速，智能化升级带动ASP提升，中期成长逻辑清晰',
+    macro_drivers: ['retail_yoy', 'export_yoy', 'gdp_yoy'],
+    logic: '内需（社零/政策补贴）+ 出口（自主品牌出海）双轮驱动，与经济复苏正相关',
+  },
+  // ── 医药板块 ──────────────────────────────────────────────────────────────
+  {
+    sector_name: '医疗器械',
+    short_benefit: '中性',
+    mid_benefit: '受益',
+    short_reason: '集采压力短期仍存，但创新器械政策支持力度加大',
+    mid_reason: '人口老龄化驱动需求长期增长，高端器械国产替代空间大',
+    macro_drivers: ['retail_yoy', 'fai_yoy'],
+    logic: '防御性板块，与宏观周期相关性较低；中期老龄化+国产替代是核心逻辑',
+  },
+  // ── 有色/资源板块 ─────────────────────────────────────────────────────────
+  {
+    sector_name: '贵金属',
+    short_benefit: '受益',
+    mid_benefit: '中性',
+    short_reason: '美联储降息预期+地缘政治风险推升黄金价格，贵金属板块受益',
+    mid_reason: '实际利率走势是中期核心变量，降息落地后黄金上涨动力边际减弱',
+    macro_drivers: ['bond_10y', 'rmb_usd'],
+    logic: '黄金与实际利率负相关：利率下行 → 黄金上涨；外部风险溢价上升也是短期催化剂',
+  },
+  {
+    sector_name: '钢铁',
+    short_benefit: '中性',
+    mid_benefit: '中性',
+    short_reason: '基建投资回升提供需求支撑，但房地产下行拖累钢铁整体需求',
+    mid_reason: '供给侧改革推进，行业集中度提升，但需求端结构性压力仍存',
+    macro_drivers: ['fai_yoy', 'ppi_yoy', 'industrial_yoy'],
+    logic: '基建（FAI）是主要需求来源；PPI走势决定盈利空间；房地产是主要拖累变量',
+  },
+];
+
+// 获取板块的宏观映射信息
+export function getSectorMacroMapping(sectorName: string): SectorMacroMapping | null {
+  return SECTOR_MACRO_MAPPING.find(m => m.sector_name === sectorName) ?? null;
+}
+
+// 受益程度颜色映射
+export function benefitColor(level: BenefitLevel): string {
+  switch (level) {
+    case '强受益': return '#ef4444';  // 红色
+    case '受益':   return '#f97316';  // 橙色
+    case '中性':   return '#94a3b8';  // 灰色
+    case '规避':   return '#22c55e';  // 绿色（A股跌为绿）
+    default:       return '#94a3b8';
+  }
+}
+
+// ─── 财务趋势数据（历史多期，用于趋势图）────────────────────────────────────────
+// 对应数据库：stock_fina_indicator（多期）+ stock_income（多期）
+export interface FinaTrendPoint {
+  period: string;        // 报告期，如 "2023Q1" / "2023"
+  end_date: string;      // 原始报告期，如 "20230331" / "20231231"
+  revenue: number;       // 营业总收入（亿元）
+  net_profit: number;    // 归母净利润（亿元）
+  revenue_yoy: number;   // 营收同比（%）
+  profit_yoy: number;    // 净利润同比（%）
+  roe: number;           // ROE（%）
+  gross_margin: number;  // 毛利率（%）
+  net_margin: number;    // 净利率（%）
+  debt_ratio: number;    // 资产负债率（%）
+}
+
+/**
+ * 生成个股财务趋势数据（季度 or 年度）
+ * 对应数据库：stock_fina_indicator JOIN stock_income，按 end_date 排序
+ */
+export function genStockFinaTrend(tsCode: string, mode: 'quarterly' | 'annual'): FinaTrendPoint[] {
+  const base = getStockBasePrice(tsCode);
+  const shareCount = 1e9 + (tsCode.charCodeAt(0) % 5) * 1e9;
+  const baseMv = base * shareCount;
+
+  // 基准财务数据（年化）
+  const baseRevenue = baseMv * (0.3 + (tsCode.charCodeAt(2) % 5) * 0.05);
+  const baseGrossMargin = 25 + (tsCode.charCodeAt(1) % 30);
+  const baseNetMargin = baseGrossMargin * (0.3 + (tsCode.charCodeAt(3) % 3) * 0.1);
+  const baseROE = 8 + (tsCode.charCodeAt(0) % 20);
+  const baseDebtRatio = 30 + (tsCode.charCodeAt(2) % 40);
+
+  const result: FinaTrendPoint[] = [];
+
+  if (mode === 'annual') {
+    // 近 8 年年报
+    for (let y = 2018; y <= 2025; y++) {
+      const trend = 1 + (y - 2018) * 0.05 + (Math.sin(y * 1.3) * 0.08);
+      const rev = parseFloat((baseRevenue * trend / 1e8).toFixed(2));
+      const gm = parseFloat((baseGrossMargin + Math.sin(y * 0.7) * 3).toFixed(2));
+      const nm = parseFloat((baseNetMargin + Math.sin(y * 0.9) * 2).toFixed(2));
+      const np = parseFloat((rev * nm / 100).toFixed(2));
+      const prevRev = y > 2018 ? parseFloat((baseRevenue * (1 + (y - 2019) * 0.05 + Math.sin((y - 1) * 1.3) * 0.08) / 1e8).toFixed(2)) : rev * 0.9;
+      const prevNp = y > 2018 ? parseFloat((prevRev * (baseNetMargin + Math.sin((y - 1) * 0.9) * 2) / 100).toFixed(2)) : np * 0.9;
+      result.push({
+        period: `${y}`,
+        end_date: `${y}1231`,
+        revenue: rev,
+        net_profit: np,
+        revenue_yoy: parseFloat(((rev / prevRev - 1) * 100).toFixed(2)),
+        profit_yoy: parseFloat(((np / prevNp - 1) * 100).toFixed(2)),
+        roe: parseFloat((baseROE + Math.sin(y * 0.8) * 4).toFixed(2)),
+        gross_margin: gm,
+        net_margin: nm,
+        debt_ratio: parseFloat((baseDebtRatio + Math.sin(y * 0.5) * 5).toFixed(2)),
+      });
+    }
+  } else {
+    // 近 12 个季度（季报）
+    const quarters = [
+      { y: 2023, q: 1, end: '20230331' }, { y: 2023, q: 2, end: '20230630' },
+      { y: 2023, q: 3, end: '20230930' }, { y: 2023, q: 4, end: '20231231' },
+      { y: 2024, q: 1, end: '20240331' }, { y: 2024, q: 2, end: '20240630' },
+      { y: 2024, q: 3, end: '20240930' }, { y: 2024, q: 4, end: '20241231' },
+      { y: 2025, q: 1, end: '20250331' }, { y: 2025, q: 2, end: '20250630' },
+      { y: 2025, q: 3, end: '20250930' }, { y: 2025, q: 4, end: '20251231' },
+    ];
+    quarters.forEach((qtr, i) => {
+      const trend = 1 + i * 0.02 + Math.sin(i * 0.8) * 0.06;
+      const rev = parseFloat((baseRevenue * trend / 4 / 1e8).toFixed(2)); // 单季
+      const gm = parseFloat((baseGrossMargin + Math.sin(i * 0.9) * 4).toFixed(2));
+      const nm = parseFloat((baseNetMargin + Math.sin(i * 1.1) * 2.5).toFixed(2));
+      const np = parseFloat((rev * nm / 100).toFixed(2));
+      const prevI = i - 4; // 同比（去年同季）
+      const prevRev = prevI >= 0 ? parseFloat((baseRevenue * (1 + prevI * 0.02 + Math.sin(prevI * 0.8) * 0.06) / 4 / 1e8).toFixed(2)) : rev * 0.88;
+      const prevNm = prevI >= 0 ? parseFloat((baseNetMargin + Math.sin(prevI * 1.1) * 2.5).toFixed(2)) : nm * 0.9;
+      const prevNp = parseFloat((prevRev * prevNm / 100).toFixed(2));
+      result.push({
+        period: `${qtr.y}Q${qtr.q}`,
+        end_date: qtr.end,
+        revenue: rev,
+        net_profit: np,
+        revenue_yoy: parseFloat(((rev / prevRev - 1) * 100).toFixed(2)),
+        profit_yoy: parseFloat(((np / prevNp - 1) * 100).toFixed(2)),
+        roe: parseFloat((baseROE / 4 + Math.sin(i * 0.7) * 2).toFixed(2)),
+        gross_margin: gm,
+        net_margin: nm,
+        debt_ratio: parseFloat((baseDebtRatio + Math.sin(i * 0.4) * 4).toFixed(2)),
+      });
+    });
+  }
+  return result;
+}
+
+// ─── 股东结构数据（对应 stock_holders 表）────────────────────────────────────────
+export interface StockHolder {
+  ts_code: string;
+  ann_date: string;
+  end_date: string;
+  holder_name: string;
+  hold_amount: number;   // 持股数量（股）
+  hold_ratio: number;    // 持股比例（%）
+  holder_type: 'state' | 'institution' | 'individual' | 'hk';  // 股东类型
+  is_top10: boolean;
+}
+
+/**
+ * 生成个股股东结构 Mock 数据
+ * 对应数据库：stock_holders 表（top10 + 机构持仓）
+ */
+export function genStockHolders(tsCode: string): StockHolder[] {
+  const seed = tsCode.charCodeAt(0) + tsCode.charCodeAt(1);
+  const baseRatio = 5 + (seed % 15); // 第一大股东持股比例基准
+
+  const holderTemplates = [
+    { name_prefix: '国资委直属', type: 'state' as const },
+    { name_prefix: '香港中央结算', type: 'hk' as const },
+    { name_prefix: '中国证券金融', type: 'institution' as const },
+    { name_prefix: '中央汇金资产管理', type: 'institution' as const },
+    { name_prefix: '易方达基金', type: 'institution' as const },
+    { name_prefix: '南方基金', type: 'institution' as const },
+    { name_prefix: '华夏基金', type: 'institution' as const },
+    { name_prefix: '招商银行理财', type: 'institution' as const },
+    { name_prefix: '社保基金', type: 'institution' as const },
+    { name_prefix: '个人股东A', type: 'individual' as const },
+  ];
+
+  const shareCount = 1e9 + (seed % 5) * 1e9;
+
+  return holderTemplates.map((t, i) => {
+    const ratio = parseFloat((baseRatio * Math.pow(0.72, i) + Math.random() * 0.5).toFixed(4));
+    return {
+      ts_code: tsCode,
+      ann_date: '20260228',
+      end_date: '20251231',
+      holder_name: t.name_prefix,
+      hold_amount: Math.round(shareCount * ratio / 100),
+      hold_ratio: ratio,
+      holder_type: t.type,
+      is_top10: true,
+    };
+  });
+}
