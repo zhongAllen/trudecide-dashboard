@@ -1,18 +1,13 @@
 /**
- * TopDown.tsx — Top-Down 选股策略 Demo
+ * TopDown.tsx — Top-Down 选股策略
  *
  * 三层递进结构：
- *   Layer 1: 宏观择时（indicator_values + indicator_meta）
- *   Layer 2: 板块轮动（sector_meta + sector_daily）
- *   Layer 3: 个股精选（sector_stock_map + stock_meta + stock_daily）
+ *   Layer 1: 宏观择时（indicator_values + indicator_meta）— Mock
+ *   Layer 2: 板块轮动（sector_meta + sector_daily）— 真实数据（dc 系统）
+ *   Layer 3: 个股精选（sector_stock_map + stock_meta + stock_daily）— 真实数据
  *
- * 当前为 Mock 数据模式，字段与数据库完全一致。
- * 接库时：将 MOCK_DATA 替换为 Supabase REST API 调用即可。
- *
- * K线数据源：
- *   - 日/周/月：stock_daily 表（Mock）
- *   - T日分时（5min/30min/1h）：新浪财经实时接口
- *     https://quotes.sina.com.cn/cn/sh/minute/[code].json
+ * Layer 1 仍使用 Mock 数据（宏观指标接库待后续完成）。
+ * Layer 2/3 已接入 Supabase 真实数据。
  */
 import { useState, useEffect, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
@@ -31,7 +26,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   MACRO_SIGNALS, MACRO_VALUES, MACRO_INDICATORS,
   MACRO_MATRIX_CN, MACRO_MATRIX_US,
-  SECTOR_META_LIST, getSectorLatest, getSectorDailyList,
   getSectorStocks, genStockKline, getStockBasePrice, genStockProfile,
   genStockFina, genStockAnnouncements,
   getSectorMacroMapping, benefitColor,
@@ -40,6 +34,10 @@ import {
   type SectorMeta, type StockMeta, type StockDaily, type BenefitLevel,
   type FinaTrendPoint, type StockHolder
 } from '@/data/topdown-mock';
+import {
+  fetchSectorList, fetchSectorHistory, fetchSectorStocks,
+  type RealSectorMeta, type RealSectorDaily
+} from '@/lib/topdown-api';
 
 // ─── 颜色常量 ──────────────────────────────────────────────────────────────────
 const UP_COLOR   = '#ef4444';
@@ -237,7 +235,6 @@ function CellExpandPanel({ cell, dimension, period }: {
                       backgroundColor: isActive ? band.color + '22' : '#f3f4f6',
                       borderColor: isActive ? band.color : '#e5e7eb',
                       color: isActive ? band.color : '#9ca3af',
-                      ringColor: isActive ? band.color : 'transparent',
                     }}
                   >
                     {isActive && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: band.color }} />}
@@ -538,18 +535,29 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
   );
 }
 
-// ─── 板块迷你 K 线图 ──────────────────────────────────────────────────────────
-function SectorMiniKline({ sectorId, trend }: { sectorId: string; trend: number }) {
-  const data = getSectorDailyList(sectorId).slice(-20).map(d => ({
-    v: d.close,
-    pct: d.pct_change,
-  }));
+// ─── 板块过义 K 线图（支持真实数据） ────────────────────────────────────────────
+function SectorMiniKline({ sectorId, trend, history }: {
+  sectorId: string;
+  trend: number;
+  history?: RealSectorDaily[];
+}) {
+  const [data, setData] = useState<{ v: number }[]>([]);
+  useEffect(() => {
+    if (history && history.length > 0) {
+      setData(history.slice(-20).map(d => ({ v: d.close ?? 0 })));
+    } else {
+      fetchSectorHistory(sectorId, 20).then(h => {
+        setData(h.map(d => ({ v: d.close ?? 0 })));
+      });
+    }
+  }, [sectorId, history]);
   const color = trend > 1 ? UP_COLOR : trend < -1 ? DOWN_COLOR : FLAT_COLOR;
+  if (data.length === 0) return <div className="h-8" />;
   return (
     <ResponsiveContainer width="100%" height={32}>
       <AreaChart data={data} margin={{ top: 1, right: 1, bottom: 1, left: 1 }}>
         <defs>
-          <linearGradient id={`sg-${sectorId.replace(/\./g, '_')}`} x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`sg-${sectorId.replace(/[.]/g, '_')}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor={color} stopOpacity={0.3} />
             <stop offset="95%" stopColor={color} stopOpacity={0} />
           </linearGradient>
@@ -559,7 +567,7 @@ function SectorMiniKline({ sectorId, trend }: { sectorId: string; trend: number 
           dataKey="v"
           stroke={color}
           strokeWidth={1.5}
-          fill={`url(#sg-${sectorId.replace(/\./g, '_')})`}
+          fill={`url(#sg-${sectorId.replace(/[.]/g, '_')})`}
           dot={false}
         />
       </AreaChart>
@@ -567,26 +575,33 @@ function SectorMiniKline({ sectorId, trend }: { sectorId: string; trend: number 
   );
 }
 
-// ─── Layer 2: 板块轮动面板 ────────────────────────────────────────────────────
+// ─── Layer 2: 板块轮动面板（真实数据） ────────────────────────────────────────────
 type SectorFilter = 'all' | '行业板块' | '概念板块' | '风格板块';
 
-function SectorPanel({ onSelectSector }: { onSelectSector: (s: SectorMeta) => void }) {
+function SectorPanel({ onSelectSector }: { onSelectSector: (s: RealSectorMeta) => void }) {
   const [filter, setFilter] = useState<SectorFilter>('行业板块');
   const [sortBy, setSortBy] = useState<'pct' | 'mv' | 'turnover'>('pct');
   const [search, setSearch] = useState('');
   const [showMacroSummary, setShowMacroSummary] = useState(true);
+  const [sectors, setSectors] = useState<Array<RealSectorMeta & { latest: RealSectorDaily | null }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 加载真实板块数据
+  useEffect(() => {
+    setLoading(true);
+    fetchSectorList().then(data => {
+      setSectors(data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
 
   // 当前宏观总结论（来自 MACRO_MATRIX_CN.summary）
   const macroShort = MACRO_MATRIX_CN.summary.short;
   const macroMid = MACRO_MATRIX_CN.summary.mid;
 
-  const filtered = SECTOR_META_LIST
+  const filtered = sectors
     .filter(s => filter === 'all' || s.idx_type === filter)
     .filter(s => !search || s.name_cn.includes(search))
-    .map(s => {
-      const latest = getSectorLatest(s.id);
-      return { ...s, latest };
-    })
     .sort((a, b) => {
       if (sortBy === 'pct') return (b.latest?.pct_change ?? 0) - (a.latest?.pct_change ?? 0);
       if (sortBy === 'mv') return (b.latest?.total_mv ?? 0) - (a.latest?.total_mv ?? 0);
@@ -594,10 +609,9 @@ function SectorPanel({ onSelectSector }: { onSelectSector: (s: SectorMeta) => vo
     });
 
   // 今日涨跌分布
-  const allSectors = SECTOR_META_LIST.map(s => getSectorLatest(s.id));
-  const upCount = allSectors.filter(s => (s?.pct_change ?? 0) > 0).length;
-  const downCount = allSectors.filter(s => (s?.pct_change ?? 0) < 0).length;
-  const flatCount = allSectors.length - upCount - downCount;
+  const upCount = sectors.filter(s => (s.latest?.pct_change ?? 0) > 0).length;
+  const downCount = sectors.filter(s => (s.latest?.pct_change ?? 0) < 0).length;
+  const flatCount = sectors.length - upCount - downCount;
 
   return (
     <div className="space-y-3">
@@ -731,71 +745,69 @@ function SectorPanel({ onSelectSector }: { onSelectSector: (s: SectorMeta) => vo
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
         <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
           <span className="text-xs font-semibold text-gray-700">板块排行（今日）</span>
-          <span className="text-xs text-gray-400">{filtered.length} 个板块</span>
+          <span className="text-xs text-gray-400">
+            {loading ? '加载中...' : `${filtered.length} 个板块`}
+          </span>
         </div>
-        <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-          {filtered.slice(0, 20).map((s, i) => {
-            const pct = s.latest?.pct_change ?? 0;
-            const dailyList = getSectorDailyList(s.id);
-            const prev5 = dailyList.slice(-6, -1);
-            const avg5pct = prev5.length > 0
-              ? prev5.reduce((sum, d) => sum + d.pct_change, 0) / prev5.length
-              : 0;
-            const mapping = getSectorMacroMapping(s.name_cn);
-            return (
-              <button
-                key={s.id}
-                onClick={() => onSelectSector(s)}
-                className="w-full px-4 py-2.5 hover:bg-blue-50 transition-colors text-left group"
-              >
-                <div className="flex items-center gap-0">
-                  <span className="text-xs text-gray-400 w-6 text-center flex-shrink-0">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium text-gray-800">{s.name_cn}</span>
-                      <span className="text-xs text-gray-400">{s.idx_type}</span>
+        {loading ? (
+          <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
+            <Activity className="w-4 h-4 mr-2 animate-spin" />正在加载真实数据...
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
+            {filtered.slice(0, 50).map((s, i) => {
+              const pct = s.latest?.pct_change ?? 0;
+              const mapping = getSectorMacroMapping(s.name_cn);
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => onSelectSector(s)}
+                  className="w-full px-4 py-2.5 hover:bg-blue-50 transition-colors text-left group"
+                >
+                  <div className="flex items-center gap-0">
+                    <span className="text-xs text-gray-400 w-6 text-center flex-shrink-0">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-gray-800">{s.name_cn}</span>
+                        <span className="text-xs text-gray-400">{s.idx_type}</span>
+                        {mapping && (
+                          <>
+                            <span
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white flex-shrink-0"
+                              style={{ backgroundColor: benefitColor(mapping.short_benefit) }}
+                            >
+                              短{mapping.short_benefit}
+                            </span>
+                            <span
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white flex-shrink-0"
+                              style={{ backgroundColor: benefitColor(mapping.mid_benefit), opacity: 0.75 }}
+                            >
+                              中{mapping.mid_benefit}
+                            </span>
+                          </>
+                        )}
+                      </div>
                       {mapping && (
-                        <>
-                          <span
-                            className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white flex-shrink-0"
-                            style={{ backgroundColor: benefitColor(mapping.short_benefit) }}
-                          >
-                            短{mapping.short_benefit}
-                          </span>
-                          <span
-                            className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white flex-shrink-0"
-                            style={{ backgroundColor: benefitColor(mapping.mid_benefit), opacity: 0.75 }}
-                          >
-                            中{mapping.mid_benefit}
-                          </span>
-                        </>
+                        <p className="text-[10px] text-gray-500 mt-0.5 truncate">{mapping.short_reason}</p>
                       )}
                     </div>
-                    {mapping && (
-                      <p className="text-[10px] text-gray-500 mt-0.5 truncate">{mapping.short_reason}</p>
+                    <span className="text-sm font-bold tabular-nums ml-2 flex-shrink-0" style={{ color: pctColor(pct) }}>
+                      {fmtPct(pct)}
+                    </span>
+                    <div className="w-20 px-1 flex-shrink-0">
+                      <SectorMiniKline sectorId={s.id} trend={pct} />
+                    </div>
+                    {s.latest?.turnover_rate != null && (
+                      <span className="text-xs text-gray-400 tabular-nums w-16 text-right flex-shrink-0">
+                        换{s.latest.turnover_rate.toFixed(2)}%
+                      </span>
                     )}
                   </div>
-                  <span className="text-sm font-bold tabular-nums ml-2 flex-shrink-0" style={{ color: pctColor(pct) }}>
-                    {fmtPct(pct)}
-                  </span>
-                  <div className="w-20 px-1 flex-shrink-0">
-                    <SectorMiniKline sectorId={s.id} trend={pct} />
-                  </div>
-                  <span className="text-xs text-gray-400 tabular-nums w-16 text-right flex-shrink-0">
-                    5日{fmtPct(avg5pct, 1)}
-                  </span>
-                  {s.latest?.up_num ? (
-                    <span className="text-xs w-14 text-right flex-shrink-0">
-                      <span className="text-red-500">{s.latest.up_num}↑</span>
-                      <span className="text-gray-300 mx-0.5">/</span>
-                      <span className="text-green-600">{s.latest.down_num}↓</span>
-                    </span>
-                  ) : <span className="w-14" />}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -811,13 +823,17 @@ function calcGarpScore(profile: ReturnType<typeof genStockProfile>, fina: Return
   moneyflow: number;      // 资金关注度（大单净流入 + 换手率）
 } {
   // 盈利质量（30分）：ROE 15分 + 毛利率 15分
-  const roeScore = Math.min(Math.max((fina.roe - 5) / 25 * 15, 0), 15);
-  const marginScore = Math.min(Math.max((fina.grossprofit_margin - 10) / 50 * 15, 0), 15);
+  const _roe = fina.roe ?? 0;
+  const _gpm = fina.grossprofit_margin ?? 0;
+  const roeScore = Math.min(Math.max((_roe - 5) / 25 * 15, 0), 15);
+  const marginScore = Math.min(Math.max((_gpm - 10) / 50 * 15, 0), 15);
   const profitQuality = parseFloat((roeScore + marginScore).toFixed(1));
 
   // 成长性（30分）：净利润增速 15分 + 营收增速 15分
-  const npGrowthScore = Math.min(Math.max((fina.netprofit_yoy + 10) / 60 * 15, 0), 15);
-  const revGrowthScore = Math.min(Math.max((fina.or_yoy + 5) / 40 * 15, 0), 15);
+  const _npYoy = fina.netprofit_yoy ?? 0;
+  const _orYoy = fina.or_yoy ?? 0;
+  const npGrowthScore = Math.min(Math.max((_npYoy + 10) / 60 * 15, 0), 15);
+  const revGrowthScore = Math.min(Math.max((_orYoy + 5) / 40 * 15, 0), 15);
   const growth = parseFloat((npGrowthScore + revGrowthScore).toFixed(1));
 
   // 估值合理性（25分）：PE 合理性 15分 + PB 合理性 10分
@@ -840,22 +856,51 @@ function calcGarpScore(profile: ReturnType<typeof genStockProfile>, fina: Return
   return { total, profitQuality, growth, valuation, moneyflow };
 }
 
-// ─── Layer 3: 个股精选面板 ────────────────────────────────────────────────────
+// ─── Layer 3: 个股精选面板（真实数据） ────────────────────────────────────────────
+
+// 真实数据版 GARP 评分（使用真实字段）
+function calcRealGarpScore(quote: {
+  pct_chg: number; pe_ttm: number | null; pb: number | null;
+  turnover_rate: number | null;
+}, fina: {
+  roe: number | null; grossprofit_margin: number | null;
+  netprofit_yoy: number | null; or_yoy: number | null;
+}, mf: { net_amount: number | null } | null) {
+  const roe = fina.roe ?? 0;
+  const gpm = fina.grossprofit_margin ?? 0;
+  const npYoy = fina.netprofit_yoy ?? 0;
+  const orYoy = fina.or_yoy ?? 0;
+  const pe = quote.pe_ttm ?? 50;
+  const pb = quote.pb ?? 3;
+  const tr = quote.turnover_rate ?? 1;
+  const netAmt = mf?.net_amount ?? 0;
+
+  const roeScore = Math.min(Math.max((roe - 5) / 25 * 15, 0), 15);
+  const marginScore = Math.min(Math.max((gpm - 10) / 50 * 15, 0), 15);
+  const profitQuality = parseFloat((roeScore + marginScore).toFixed(1));
+
+  const npGrowthScore = Math.min(Math.max((npYoy + 10) / 60 * 15, 0), 15);
+  const revGrowthScore = Math.min(Math.max((orYoy + 5) / 40 * 15, 0), 15);
+  const growth = parseFloat((npGrowthScore + revGrowthScore).toFixed(1));
+
+  const peScore = Math.min(Math.max((50 - pe) / 35 * 15, 0), 15);
+  const pbScore = Math.min(Math.max((8 - pb) / 6 * 10, 0), 10);
+  const valuation = parseFloat((peScore + pbScore).toFixed(1));
+
+  const netFlowScore = Math.min(Math.max((netAmt + 1000) / 5000 * 10, 0), 10);
+  const trScore = tr >= 1 && tr <= 3 ? 5 : tr < 1 ? tr / 1 * 5 : Math.max(5 - (tr - 3) * 0.5, 0);
+  const moneyflow = parseFloat((netFlowScore + trScore).toFixed(1));
+
+  const total = parseFloat((profitQuality + growth + valuation + moneyflow).toFixed(1));
+  return { total, profitQuality, growth, valuation, moneyflow };
+}
+
 function StockListPanel({ sector, onSelectStock }: {
-  sector: SectorMeta;
+  sector: RealSectorMeta;
   onSelectStock: (s: StockMeta) => void;
 }) {
-  const stocks = getSectorStocks(sector.id);
-  const profiles = stocks.map(s => genStockProfile(s));
-  const finas = stocks.map(s => genStockFina(s.ts_code).fina);
-
-  // GARP 评分
-  const scored = profiles.map((p, i) => ({
-    meta: stocks[i],
-    profile: p,
-    fina: finas[i],
-    garp: calcGarpScore(p, finas[i]),
-  }));
+  const [loading, setLoading] = useState(true);
+  const [realStocks, setRealStocks] = useState<Awaited<ReturnType<typeof fetchSectorStocks>>>([]);
 
   // 筛选状态
   const [sortBy, setSortBy] = useState<'garp' | 'pct' | 'pe' | 'roe' | 'growth' | 'flow'>('garp');
@@ -868,20 +913,38 @@ function StockListPanel({ sector, onSelectStock }: {
   // 板块宏观映射
   const mapping = getSectorMacroMapping(sector.name_cn);
 
+  // 加载真实个股数据
+  useEffect(() => {
+    setLoading(true);
+    fetchSectorStocks(sector.id).then(data => {
+      setRealStocks(data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [sector.id]);
+
+  // 构建评分数据
+  const scored = realStocks.map(({ meta, quote, fina, moneyflow }) => ({
+    meta,
+    quote,
+    fina,
+    moneyflow,
+    garp: calcRealGarpScore(quote, fina, moneyflow),
+  }));
+
   const sorted = [...scored]
     .filter(s => filterMode === 'default' || (
-      s.fina.roe >= minRoe &&
-      s.profile.pe_ttm <= maxPe &&
-      s.fina.netprofit_yoy >= minGrowth
+      (s.fina.roe ?? 0) >= minRoe &&
+      (s.quote.pe_ttm ?? 999) <= maxPe &&
+      (s.fina.netprofit_yoy ?? -999) >= minGrowth
     ))
     .sort((a, b) => {
       switch (sortBy) {
         case 'garp': return b.garp.total - a.garp.total;
-        case 'pct': return b.profile.pct_chg_today - a.profile.pct_chg_today;
-        case 'pe': return a.profile.pe_ttm - b.profile.pe_ttm;
-        case 'roe': return b.fina.roe - a.fina.roe;
-        case 'growth': return b.fina.netprofit_yoy - a.fina.netprofit_yoy;
-        case 'flow': return b.profile.net_amount - a.profile.net_amount;
+        case 'pct': return b.quote.pct_chg - a.quote.pct_chg;
+        case 'pe': return (a.quote.pe_ttm ?? 999) - (b.quote.pe_ttm ?? 999);
+        case 'roe': return (b.fina.roe ?? 0) - (a.fina.roe ?? 0);
+        case 'growth': return (b.fina.netprofit_yoy ?? -999) - (a.fina.netprofit_yoy ?? -999);
+        case 'flow': return (b.moneyflow?.net_amount ?? 0) - (a.moneyflow?.net_amount ?? 0);
         default: return 0;
       }
     });
@@ -893,7 +956,7 @@ function StockListPanel({ sector, onSelectStock }: {
         <div className="flex items-center gap-2 mb-2">
           <div className="w-2 h-2 rounded-full bg-blue-500" />
           <span className="text-sm font-semibold text-gray-800">{sector.name_cn}</span>
-          <span className="text-xs text-gray-400">{sector.idx_type} · {stocks.length} 只成分股</span>
+          <span className="text-xs text-gray-400">{sector.idx_type} · {loading ? '...' : `${realStocks.length} 只成分股`}</span>
           {mapping && (
             <>
               <span
@@ -1039,87 +1102,102 @@ function StockListPanel({ sector, onSelectStock }: {
           <span className="text-right">净利增速</span>
           <span className="text-right">资金净流入(万)</span>
         </div>
-        <div className="divide-y divide-gray-50">
-          {sorted.map(({ meta, profile: p, fina, garp }, i) => (
-            <div key={p.ts_code} className="group">
-              <button
-                onClick={() => onSelectStock(meta)}
-                className="w-full grid grid-cols-[1.5fr_0.7fr_0.7fr_0.7fr_0.7fr_0.7fr_1.2fr] gap-0 px-4 py-2.5 hover:bg-blue-50 transition-colors text-left"
-              >
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-gray-400 w-4">{i + 1}</span>
-                    <span className="text-sm font-semibold text-gray-900">{p.name_cn}</span>
-                  </div>
-                  <div className="text-xs text-gray-400 font-mono ml-5">{meta.symbol}</div>
-                </div>
-                {/* GARP 综合评分 */}
-                <div className="text-right">
-                  <div
-                    className="inline-flex items-center justify-center w-10 h-6 rounded-md text-xs font-bold text-white"
-                    style={{
-                      backgroundColor: garp.total >= 70 ? '#ef4444' : garp.total >= 55 ? '#f97316' : garp.total >= 40 ? '#94a3b8' : '#22c55e'
-                    }}
-                  >
-                    {garp.total.toFixed(0)}
-                  </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
+            <Activity className="w-4 h-4 mr-2 animate-spin" />正在加载成分股数据...
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className="flex items-center justify-center py-12 text-gray-400 text-sm">暂无数据</div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {sorted.map(({ meta, quote, fina, moneyflow: mf, garp }, i) => {
+              const roe = fina.roe ?? 0;
+              const npYoy = fina.netprofit_yoy ?? 0;
+              const netAmt = mf?.net_amount ?? 0;
+              return (
+                <div key={meta.ts_code} className="group">
                   <button
-                    onClick={e => { e.stopPropagation(); setShowGarpDetail(showGarpDetail === p.ts_code ? null : p.ts_code); }}
-                    className="ml-1 text-[10px] text-gray-400 hover:text-blue-500"
+                    onClick={() => onSelectStock(meta as unknown as StockMeta)}
+                    className="w-full grid grid-cols-[1.5fr_0.7fr_0.7fr_0.7fr_0.7fr_0.7fr_1.2fr] gap-0 px-4 py-2.5 hover:bg-blue-50 transition-colors text-left"
                   >
-                    {showGarpDetail === p.ts_code ? '▲' : '▼'}
-                  </button>
-                </div>
-                <div className="text-right">
-                  <span className="text-sm font-bold tabular-nums" style={{ color: pctColor(p.pct_chg_today) }}>
-                    {fmtPct(p.pct_chg_today)}
-                  </span>
-                </div>
-                <div className="text-right text-sm text-gray-600 tabular-nums">{p.pe_ttm.toFixed(1)}</div>
-                <div className="text-right text-sm tabular-nums" style={{ color: fina.roe >= 15 ? '#ef4444' : fina.roe >= 8 ? '#f97316' : '#94a3b8' }}>
-                  {fina.roe.toFixed(1)}
-                </div>
-                <div className="text-right text-sm tabular-nums" style={{ color: fina.netprofit_yoy >= 20 ? '#ef4444' : fina.netprofit_yoy >= 0 ? '#f97316' : '#22c55e' }}>
-                  {fmtPct(fina.netprofit_yoy, 1)}
-                </div>
-                <div className="text-right text-sm tabular-nums" style={{ color: p.net_amount >= 0 ? '#ef4444' : '#22c55e' }}>
-                  {p.net_amount >= 0 ? '+' : ''}{fmtNum(p.net_amount, 0)}
-                </div>
-              </button>
-              {/* GARP 得分明细展开 */}
-              {showGarpDetail === p.ts_code && (
-                <div className="px-4 pb-3 bg-amber-50 border-t border-amber-100">
-                  <div className="text-[10px] text-amber-700 font-semibold mb-1.5">GARP 得分构成（总分 {garp.total}）</div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { label: '盈利质量', score: garp.profitQuality, max: 30, desc: `ROE ${fina.roe.toFixed(1)}% + 毛利率 ${fina.grossprofit_margin.toFixed(1)}%`, color: '#ef4444' },
-                      { label: '成长性', score: garp.growth, max: 30, desc: `净利增速 ${fmtPct(fina.netprofit_yoy, 1)} + 营收增速 ${fmtPct(fina.or_yoy, 1)}`, color: '#f97316' },
-                      { label: '估值合理性', score: garp.valuation, max: 25, desc: `PE ${p.pe_ttm.toFixed(1)}倍 + PB ${p.pb.toFixed(2)}倍`, color: '#3b82f6' },
-                      { label: '资金关注度', score: garp.moneyflow, max: 15, desc: `净流入 ${fmtNum(p.net_amount, 0)}万 + 换手率 ${p.turnover_rate.toFixed(2)}%`, color: '#8b5cf6' },
-                    ].map(item => (
-                      <div key={item.label} className="bg-white rounded-lg px-2 py-1.5">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-semibold" style={{ color: item.color }}>{item.label}</span>
-                          <span className="text-[10px] font-bold text-gray-700">{item.score}/{item.max}</span>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-1 mb-1">
-                          <div
-                            className="h-1 rounded-full"
-                            style={{ width: `${(item.score / item.max) * 100}%`, backgroundColor: item.color }}
-                          />
-                        </div>
-                        <div className="text-[9px] text-gray-500">{item.desc}</div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400 w-4">{i + 1}</span>
+                        <span className="text-sm font-semibold text-gray-900">{meta.name_cn}</span>
                       </div>
-                    ))}
-                  </div>
-                  <div className="mt-1.5 text-[9px] text-gray-400">
-                    综合得分 = {garp.profitQuality}（盈利质量）+ {garp.growth}（成长性）+ {garp.valuation}（估值）+ {garp.moneyflow}（资金）= <strong>{garp.total}</strong>
-                  </div>
+                      <div className="text-xs text-gray-400 font-mono ml-5">{meta.symbol}</div>
+                    </div>
+                    {/* GARP 综合评分 */}
+                    <div className="text-right">
+                      <div
+                        className="inline-flex items-center justify-center w-10 h-6 rounded-md text-xs font-bold text-white"
+                        style={{
+                          backgroundColor: garp.total >= 70 ? '#ef4444' : garp.total >= 55 ? '#f97316' : garp.total >= 40 ? '#94a3b8' : '#22c55e'
+                        }}
+                      >
+                        {garp.total.toFixed(0)}
+                      </div>
+                      <button
+                        onClick={e => { e.stopPropagation(); setShowGarpDetail(showGarpDetail === meta.ts_code ? null : meta.ts_code); }}
+                        className="ml-1 text-[10px] text-gray-400 hover:text-blue-500"
+                      >
+                        {showGarpDetail === meta.ts_code ? '▲' : '▼'}
+                      </button>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-bold tabular-nums" style={{ color: pctColor(quote.pct_chg) }}>
+                        {fmtPct(quote.pct_chg)}
+                      </span>
+                    </div>
+                    <div className="text-right text-sm text-gray-600 tabular-nums">
+                      {quote.pe_ttm != null ? quote.pe_ttm.toFixed(1) : '-'}
+                    </div>
+                    <div className="text-right text-sm tabular-nums" style={{ color: roe >= 15 ? '#ef4444' : roe >= 8 ? '#f97316' : '#94a3b8' }}>
+                      {roe.toFixed(1)}
+                    </div>
+                    <div className="text-right text-sm tabular-nums" style={{ color: npYoy >= 20 ? '#ef4444' : npYoy >= 0 ? '#f97316' : '#22c55e' }}>
+                      {fmtPct(npYoy, 1)}
+                    </div>
+                    <div className="text-right text-sm tabular-nums" style={{ color: netAmt >= 0 ? '#ef4444' : '#22c55e' }}>
+                      {netAmt >= 0 ? '+' : ''}{fmtNum(netAmt, 0)}
+                    </div>
+                  </button>
+                  {/* GARP 得分明细展开 */}
+                  {showGarpDetail === meta.ts_code && (
+                    <div className="px-4 pb-3 bg-amber-50 border-t border-amber-100">
+                      <div className="text-[10px] text-amber-700 font-semibold mb-1.5">GARP 得分构成（总分 {garp.total}）</div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { label: '盈利质量', score: garp.profitQuality, max: 30, desc: `ROE ${roe.toFixed(1)}% + 毛利率 ${(fina.grossprofit_margin ?? 0).toFixed(1)}%`, color: '#ef4444' },
+                          { label: '成长性', score: garp.growth, max: 30, desc: `净利增速 ${fmtPct(npYoy, 1)} + 营收增速 ${fmtPct(fina.or_yoy ?? 0, 1)}`, color: '#f97316' },
+                          { label: '估值合理性', score: garp.valuation, max: 25, desc: `PE ${quote.pe_ttm != null ? quote.pe_ttm.toFixed(1) : '-'}倍 + PB ${quote.pb != null ? quote.pb.toFixed(2) : '-'}倍`, color: '#3b82f6' },
+                          { label: '资金关注度', score: garp.moneyflow, max: 15, desc: `净流入 ${fmtNum(netAmt, 0)}万 + 换手率 ${(quote.turnover_rate ?? 0).toFixed(2)}%`, color: '#8b5cf6' },
+                        ].map(item => (
+                          <div key={item.label} className="bg-white rounded-lg px-2 py-1.5">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-semibold" style={{ color: item.color }}>{item.label}</span>
+                              <span className="text-[10px] font-bold text-gray-700">{item.score}/{item.max}</span>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-1 mb-1">
+                              <div
+                                className="h-1 rounded-full"
+                                style={{ width: `${(item.score / item.max) * 100}%`, backgroundColor: item.color }}
+                              />
+                            </div>
+                            <div className="text-[9px] text-gray-500">{item.desc}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-1.5 text-[9px] text-gray-400">
+                        综合得分 = {garp.profitQuality}（盈利质量）+ {garp.growth}（成长性）+ {garp.valuation}（估值）+ {garp.moneyflow}（资金）= <strong>{garp.total}</strong>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1915,10 +1993,10 @@ function StockDetailPanel({ stock, onClose }: { stock: StockMeta; onClose: () =>
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 export default function TopDown() {
   const [activeLayer, setActiveLayer] = useState<1 | 2 | 3>(1);
-  const [selectedSector, setSelectedSector] = useState<SectorMeta | null>(null);
+  const [selectedSector, setSelectedSector] = useState<RealSectorMeta | null>(null);
   const [selectedStock, setSelectedStock] = useState<StockMeta | null>(null);
 
-  const handleSelectSector = useCallback((s: SectorMeta) => {
+  const handleSelectSector = useCallback((s: RealSectorMeta) => {
     setSelectedSector(s);
     setSelectedStock(null);
     setActiveLayer(3);
@@ -1953,7 +2031,8 @@ export default function TopDown() {
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs text-white/50">
-              <span className="bg-white/10 px-2 py-1 rounded">Mock 数据 · 字段与数据库一致</span>
+              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded">板块/个股 真实数据</span>
+              <span className="bg-white/10 px-2 py-1 rounded">宏观指标 Mock</span>
             </div>
           </div>
         </header>
