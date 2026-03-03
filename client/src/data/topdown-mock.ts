@@ -470,3 +470,229 @@ export function genStockProfile(meta: StockMeta): StockProfile {
     low_52w: parseFloat((basePrice * 0.65).toFixed(2)),
   };
 }
+
+// ─── 宏观状态矩阵 Mock 数据 ──────────────────────────────────────────────────────
+// 对应数据库：indicator_values（region 字段区分 CN/US）
+// 时间维度：短期（3-9月）/ 中期（2-3年）/ 长期（5-10年）
+// 状态标签：扩张/复苏/中性/收缩/过热/低估/合理/高估/宽松/适度宽松/偏紧/强刺激/温和宽松
+
+export type MatrixRegion = 'CN' | 'US';
+export type MatrixPeriod = 'short' | 'mid' | 'long';
+
+export interface MatrixCell {
+  status: string;             // 状态标签（中文）
+  score: number;              // 0-100 评分
+  trend: 'up' | 'down' | 'flat'; // 趋势方向（用于小箭头）
+  desc: string;               // 简短说明（tooltip）
+  indicators: string[];       // 对应的 indicator_id 列表（indicator_values.indicator_id）
+  data_quality: 'ok' | 'warn' | 'mock'; // 数据质量（mock=测试数据）
+}
+
+export interface MacroMatrixRow {
+  dimension: string;           // 维度名称
+  a_stock_corr: '正相关' | '负相关' | '弱相关'; // 对A股影响方向
+  short: MatrixCell;           // 短期（3-9个月）
+  mid: MatrixCell;             // 中期（2-3年）
+  long: MatrixCell;            // 长期（5-10年）
+}
+
+export interface MacroMatrix {
+  region: MatrixRegion;
+  snapshot_date: string;       // 快照日期（YYYYMM，对应 indicator_values.trade_date）
+  model_version: string;
+  rows: MacroMatrixRow[];
+  summary: {                   // 综合评估行
+    short: MatrixCell;
+    mid: MatrixCell;
+    long: MatrixCell;
+  };
+}
+
+// 中国宏观状态矩阵（CN）
+export const MACRO_MATRIX_CN: MacroMatrix = {
+  region: 'CN',
+  snapshot_date: '202603',
+  model_version: 'v1',
+  rows: [
+    {
+      dimension: '宏观经济',
+      a_stock_corr: '正相关',
+      short: {
+        status: '扩张',
+        score: 80,
+        trend: 'up',
+        desc: 'GDP同比5.1%，PMI连续2月回升至50.2，工业增加值加速，经济动能温和扩张',
+        indicators: ['gdp_yoy', 'pmi_mfg'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '复苏',
+        score: 62,
+        trend: 'up',
+        desc: '内需修复节奏偏慢，出口承压，中期复苏路径仍存不确定性',
+        indicators: ['gdp_yoy', 'pmi_mfg'],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 50,
+        trend: 'flat',
+        desc: '人口结构、债务周期等长期因素制约潜在增速，中性判断',
+        indicators: ['gdp_yoy'],
+        data_quality: 'mock',
+      },
+    },
+    {
+      dimension: '流动性',
+      a_stock_corr: '正相关',
+      short: {
+        status: '宽松',
+        score: 75,
+        trend: 'up',
+        desc: 'M2同比7.5%，社融增速回升，LPR处历史低位，银行间流动性充裕',
+        indicators: ['m2_yoy', 'social_financing_yoy'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '适度宽松',
+        score: 68,
+        trend: 'flat',
+        desc: '货币政策空间仍有，但汇率约束限制进一步宽松幅度',
+        indicators: ['m2_yoy', 'rmb_usd'],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 55,
+        trend: 'flat',
+        desc: '利率中枢长期下行趋势确立，但债务扩张空间收窄',
+        indicators: ['m2_yoy'],
+        data_quality: 'mock',
+      },
+    },
+    {
+      dimension: '政策与预期',
+      a_stock_corr: '正相关',
+      short: {
+        status: '温和宽松',
+        score: 70,
+        trend: 'up',
+        desc: '财政赤字率提升至4%，专项债加速发行，地产收储政策持续落地',
+        indicators: ['social_financing_yoy'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '强刺激',
+        score: 78,
+        trend: 'up',
+        desc: '政策组合拳力度超预期，科技+消费双轮驱动，市场预期明显改善',
+        indicators: ['social_financing_yoy'],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 52,
+        trend: 'flat',
+        desc: '结构性改革推进，但外部环境不确定性长期存在',
+        indicators: [],
+        data_quality: 'mock',
+      },
+    },
+    {
+      dimension: '市场估值情绪',
+      a_stock_corr: '正相关',
+      short: {
+        status: '合理',
+        score: 55,
+        trend: 'flat',
+        desc: '沪深300 PE(TTM)约12倍，处历史25%分位，短期估值合理偏低',
+        indicators: ['hs300_pe', 'all_a_pe'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '低估',
+        score: 65,
+        trend: 'up',
+        desc: '全A市盈率15.7倍，处历史30%分位以下，中期具备较强安全边际',
+        indicators: ['hs300_pe', 'all_a_pe'],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '低估',
+        score: 72,
+        trend: 'up',
+        desc: '与全球主要市场相比，A股长期估值折价明显，具备配置价值',
+        indicators: ['hs300_pe'],
+        data_quality: 'mock',
+      },
+    },
+  ],
+  summary: {
+    short: {
+      status: '复苏',
+      score: 70,
+      trend: 'up',
+      desc: '短期宏观环境偏多，经济扩张+流动性宽松+政策发力，建议积极配置',
+      indicators: [],
+      data_quality: 'mock',
+    },
+    mid: {
+      status: '复苏',
+      score: 68,
+      trend: 'up',
+      desc: '中期复苏路径确立，但节奏存在不确定性，建议均衡配置',
+      indicators: [],
+      data_quality: 'mock',
+    },
+    long: {
+      status: '中性',
+      score: 57,
+      trend: 'flat',
+      desc: '长期结构性机会存在，但整体中性，建议精选赛道',
+      indicators: [],
+      data_quality: 'mock',
+    },
+  },
+};
+
+// 美国宏观状态矩阵（US）
+export const MACRO_MATRIX_US: MacroMatrix = {
+  region: 'US',
+  snapshot_date: '202603',
+  model_version: 'v1',
+  rows: [
+    {
+      dimension: '宏观经济',
+      a_stock_corr: '弱相关',
+      short: { status: '中性', score: 52, trend: 'down', desc: 'GDP增速放缓至1.8%，制造业PMI收缩，软着陆预期动摇', indicators: [], data_quality: 'mock' },
+      mid: { status: '收缩', score: 38, trend: 'down', desc: '高利率滞后效应显现，信贷收紧，衰退风险上升', indicators: [], data_quality: 'mock' },
+      long: { status: '中性', score: 55, trend: 'flat', desc: '美国经济韧性长期存在，AI产业革命提供新动能', indicators: [], data_quality: 'mock' },
+    },
+    {
+      dimension: '流动性',
+      a_stock_corr: '负相关',
+      short: { status: '偏紧', score: 35, trend: 'up', desc: '联储维持高利率，但降息预期升温，流动性边际改善', indicators: [], data_quality: 'mock' },
+      mid: { status: '适度宽松', score: 60, trend: 'up', desc: '降息周期开启后中期改善，对风险资产有利', indicators: [], data_quality: 'mock' },
+      long: { status: '中性', score: 50, trend: 'flat', desc: '利率中枢高于疫情前，流动性长期中性', indicators: [], data_quality: 'mock' },
+    },
+    {
+      dimension: '政策与预期',
+      a_stock_corr: '弱相关',
+      short: { status: '中性偏松', score: 58, trend: 'flat', desc: '财政刺激有限，大选年政策不确定性上升', indicators: [], data_quality: 'mock' },
+      mid: { status: '中性', score: 50, trend: 'flat', desc: '两党政策分歧加大，监管不确定性制约投资', indicators: [], data_quality: 'mock' },
+      long: { status: '中性', score: 52, trend: 'flat', desc: '美国政策周期性强，长期中性判断', indicators: [], data_quality: 'mock' },
+    },
+    {
+      dimension: '市场估值情绪',
+      a_stock_corr: '弱相关',
+      short: { status: '高估', score: 32, trend: 'down', desc: '标普500 PE约22倍，处历史75%分位，估值偏高，风险溢价压缩', indicators: [], data_quality: 'mock' },
+      mid: { status: '合理', score: 50, trend: 'flat', desc: 'AI驱动盈利增长支撑估值，中期合理', indicators: [], data_quality: 'mock' },
+      long: { status: '合理', score: 55, trend: 'flat', desc: '长期盈利增长支撑，但估值扩张空间有限', indicators: [], data_quality: 'mock' },
+    },
+  ],
+  summary: {
+    short: { status: '中性', score: 44, trend: 'down', desc: '短期美国宏观偏弱，高估值+经济放缓，建议低配美股', indicators: [], data_quality: 'mock' },
+    mid: { status: '复苏', score: 55, trend: 'up', desc: '降息周期开启后中期改善，可逐步增配', indicators: [], data_quality: 'mock' },
+    long: { status: '中性', score: 53, trend: 'flat', desc: '长期中性，AI产业机会与高估值风险并存', indicators: [], data_quality: 'mock' },
+  },
+};
