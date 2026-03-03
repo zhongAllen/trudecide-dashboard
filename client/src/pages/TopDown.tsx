@@ -157,50 +157,133 @@ function CellExpandPanel({ cell, dimension, period }: {
   dimension: string;
   period: string;
 }) {
+  const [activeTab, setActiveTab] = useState<'factors' | 'indicators'>('factors');
+  const scoreColor = cellScoreColor(cell.score);
+  const hasFactor = cell.factors && cell.factors.length > 0;
+
   return (
     <div className="mt-2 pt-2 border-t border-white/50 space-y-2">
       {/* 描述 */}
       <p className="text-[11px] text-gray-700 leading-relaxed">{cell.desc}</p>
-      {/* 关联指标列表 */}
-      {cell.indicators.length > 0 && (
-        <div className="space-y-1.5">
-          <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">关联指标</div>
-          {cell.indicators.slice(0, 3).map(id => {
-            const meta = MACRO_INDICATORS.find(m => m.id === id);
-            const vals = MACRO_VALUES[id] ?? [];
-            const latest = vals[vals.length - 1];
-            const prev = vals[vals.length - 2];
-            const change = latest && prev ? latest.value - prev.value : null;
-            return (
-              <div key={id} className="bg-white/80 rounded-lg p-2 border border-white/50">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] text-gray-500 font-medium">{meta?.name_cn ?? id}</span>
-                  <div className="flex items-center gap-1">
-                    {change !== null && (
-                      <span className="text-[10px]" style={{ color: change > 0 ? UP_COLOR : change < 0 ? DOWN_COLOR : FLAT_COLOR }}>
-                        {change > 0 ? '▲' : change < 0 ? '▼' : '—'}{Math.abs(change).toFixed(2)}
-                      </span>
-                    )}
-                    <span className="text-[11px] font-bold text-gray-800">
-                      {latest ? `${latest.value}${meta?.unit ?? ''}` : '—'}
-                    </span>
-                  </div>
-                </div>
-                {vals.length > 0 && <MiniLineChart indicatorId={id} color={cellScoreColor(cell.score)} />}
-              </div>
-            );
-          })}
-          {cell.indicators.length > 3 && (
-            <div className="text-[10px] text-gray-400 text-center">
-              + {cell.indicators.length - 3} 个指标（接库后显示）
-            </div>
-          )}
+
+      {/* REQ-145: 切换标签 */}
+      {hasFactor && (
+        <div className="flex gap-1 text-[10px]">
+          {(['factors', 'indicators'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-2 py-0.5 rounded-full font-medium transition-colors ${
+                activeTab === tab ? 'text-white' : 'bg-white/60 text-gray-500 hover:bg-white/80'
+              }`}
+              style={activeTab === tab ? { backgroundColor: scoreColor } : {}}
+            >
+              {tab === 'factors' ? '得分构成' : '关联指标'}
+            </button>
+          ))}
         </div>
       )}
-      {cell.indicators.length === 0 && (
-        <div className="text-[10px] text-gray-400 bg-white/50 rounded p-2 text-center">
-          暂无结构化指标数据，接库后接入
+
+      {/* REQ-145: 因子贡献表格 */}
+      {hasFactor && activeTab === 'factors' && (
+        <div className="space-y-1.5">
+          {cell.score_formula && (
+            <div className="bg-white/70 rounded-lg px-2.5 py-1.5 border border-white/60">
+              <div className="text-[9px] text-gray-400 font-medium uppercase tracking-wide mb-0.5">得分公式</div>
+              <div className="text-[10px] text-gray-600 font-mono leading-relaxed">{cell.score_formula}</div>
+            </div>
+          )}
+          <div className="bg-white/70 rounded-lg overflow-hidden border border-white/60">
+            <table className="w-full text-[10px]">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left px-2 py-1 text-gray-400 font-medium">因子</th>
+                  <th className="text-right px-2 py-1 text-gray-400 font-medium">当前值</th>
+                  <th className="text-right px-2 py-1 text-gray-400 font-medium">权重</th>
+                  <th className="text-right px-2 py-1 text-gray-400 font-medium">贡献分</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cell.factors!.map((f, i) => (
+                  <tr key={i} className={i % 2 === 0 ? 'bg-white/40' : ''}>
+                    <td className="px-2 py-1">
+                      <div className="flex items-center gap-1">
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                          f.direction === '正向' ? 'bg-red-400' :
+                          f.direction === '负向' ? 'bg-green-500' : 'bg-gray-400'
+                        }`} />
+                        <span className="text-gray-700 font-medium">{f.name}</span>
+                      </div>
+                      {f.note && <div className="text-[9px] text-gray-400 ml-2.5 mt-0.5 leading-tight">{f.note}</div>}
+                    </td>
+                    <td className="px-2 py-1 text-right text-gray-600 font-mono whitespace-nowrap">
+                      {f.current_value !== null ? `${f.current_value}${f.unit}` : '—'}
+                    </td>
+                    <td className="px-2 py-1 text-right text-gray-500">
+                      {Math.round(f.weight * 100)}%
+                    </td>
+                    <td className="px-2 py-1 text-right font-bold" style={{ color: scoreColor }}>
+                      +{f.contribution.toFixed(1)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-gray-200 bg-white/60">
+                  <td className="px-2 py-1 text-gray-500 font-medium" colSpan={3}>综合得分</td>
+                  <td className="px-2 py-1 text-right font-bold text-sm" style={{ color: scoreColor }}>
+                    {cell.score}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
+      )}
+
+      {/* 关联指标面板 */}
+      {(!hasFactor || activeTab === 'indicators') && (
+        <>
+          {cell.indicators.length > 0 ? (
+            <div className="space-y-1.5">
+              <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">关联指标</div>
+              {cell.indicators.slice(0, 3).map(id => {
+                const meta = MACRO_INDICATORS.find(m => m.id === id);
+                const vals = MACRO_VALUES[id] ?? [];
+                const latest = vals[vals.length - 1];
+                const prev = vals[vals.length - 2];
+                const change = latest && prev ? latest.value - prev.value : null;
+                return (
+                  <div key={id} className="bg-white/80 rounded-lg p-2 border border-white/50">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-gray-500 font-medium">{meta?.name_cn ?? id}</span>
+                      <div className="flex items-center gap-1">
+                        {change !== null && (
+                          <span className="text-[10px]" style={{ color: change > 0 ? UP_COLOR : change < 0 ? DOWN_COLOR : FLAT_COLOR }}>
+                            {change > 0 ? '▲' : change < 0 ? '▼' : '—'}{Math.abs(change).toFixed(2)}
+                          </span>
+                        )}
+                        <span className="text-[11px] font-bold text-gray-800">
+                          {latest ? `${latest.value}${meta?.unit ?? ''}` : '—'}
+                        </span>
+                      </div>
+                    </div>
+                    {vals.length > 0 && <MiniLineChart indicatorId={id} color={scoreColor} />}
+                  </div>
+                );
+              })}
+              {cell.indicators.length > 3 && (
+                <div className="text-[10px] text-gray-400 text-center">
+                  + {cell.indicators.length - 3} 个指标（接库后显示）
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-[10px] text-gray-400 bg-white/50 rounded p-2 text-center">
+              暂无结构化指标数据，接库后接入
+            </div>
+          )}
+        </>
       )}
     </div>
   );

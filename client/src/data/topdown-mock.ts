@@ -326,13 +326,29 @@ export const MACRO_VALUES: Record<string, IndicatorValue[]> = {
 
 export type MatrixRegion = 'CN' | 'US';
 
+// REQ-145: 因子贡献透明化 — 每个因子的名称、当前值、权重、得分贡献
+export interface ScoreFactor {
+  name: string;         // 因子名称（如"制造业PMI"）
+  indicator_id: string; // 对应 indicator_meta.id
+  current_value: number | null; // 当前值
+  unit: string;         // 单位（如"点"、"%"）
+  weight: number;       // 权重（0-1，所有因子之和=1）
+  raw_score: number;    // 该因子的原始评分（0-100）
+  contribution: number; // 得分贡献 = raw_score × weight（保留1位小数）
+  direction: '正向' | '负向'; // 对总分的影响方向
+  note?: string;        // 简短说明（可选）
+}
+
 export interface MatrixCell {
   status: string;           // 状态标签（如"扩张"、"宽松"）
-  score: number;            // 综合评分 0-100
+  score: number;            // 综合评分 0-100（= Σ factor.contribution）
   trend: 'up' | 'down' | 'flat';
   desc: string;             // 详细描述
   indicators: string[];     // 关联的 indicator_id 列表（与 indicator_meta.id 一致）
   data_quality: 'live' | 'mock' | 'warn';
+  // REQ-145: 因子贡献明细（硬编码，保证输出一致性）
+  factors?: ScoreFactor[];
+  score_formula?: string;   // 得分计算公式说明（如"= PMI贡献(28) + GDP贡献(22) + ..."）
 }
 
 export interface MacroMatrixRow {
@@ -375,6 +391,15 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '制造业PMI连续2月回升至50.2，非制造业PMI=52.3，工业增加值同比+5.8%，GDP同比5.1%，零售同比+4.2%，经济动能温和扩张',
         indicators: ['pmi_mfg', 'pmi_non_mfg', 'gdp_yoy', 'industrial_yoy', 'retail_yoy'],
         data_quality: 'mock',
+        // REQ-145: 因子贡献明细（权重之和=1，contribution之和≈score）
+        factors: [
+          { name: '制造业PMI', indicator_id: 'pmi_mfg', current_value: 50.2, unit: '点', weight: 0.30, raw_score: 85, contribution: 25.5, direction: '正向', note: 'PMI>50为扩张，50.2连续2月回升，信号强' },
+          { name: '非制造业PMI', indicator_id: 'pmi_non_mfg', current_value: 52.3, unit: '点', weight: 0.20, raw_score: 90, contribution: 18.0, direction: '正向', note: '服务业景气度高，52.3为近年高位' },
+          { name: 'GDP同比增速', indicator_id: 'gdp_yoy', current_value: 5.1, unit: '%', weight: 0.25, raw_score: 80, contribution: 20.0, direction: '正向', note: '5.1%高于政府目标5%，增长质量稳健' },
+          { name: '工业增加值同比', indicator_id: 'industrial_yoy', current_value: 5.8, unit: '%', weight: 0.15, raw_score: 75, contribution: 11.3, direction: '正向', note: '工业产出加速，制造业回暖信号' },
+          { name: '社会消费品零售同比', indicator_id: 'retail_yoy', current_value: 4.2, unit: '%', weight: 0.10, raw_score: 52, contribution: 5.2, direction: '正向', note: '消费偏弱，拖累整体评分' },
+        ],
+        score_formula: '综合得分 = PMI制造(25.5) + PMI非制造(18.0) + GDP增速(20.0) + 工业产出(11.3) + 消费零售(5.2) ≈ 80分',
       },
       mid: {
         status: '复苏',
@@ -383,6 +408,14 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '内需修复节奏偏慢，出口金额同比-2.1%受外部压制，固定资产投资同比+3.5%，中期复苏路径存不确定性',
         indicators: ['gdp_yoy', 'gdp_qoq', 'fai_yoy', 'export_yoy', 'import_yoy', 'unemployment_rate'],
         data_quality: 'mock',
+        factors: [
+          { name: 'GDP同比增速', indicator_id: 'gdp_yoy', current_value: 5.1, unit: '%', weight: 0.30, raw_score: 80, contribution: 24.0, direction: '正向', note: '中期增速预期维持5%左右' },
+          { name: '固定资产投资同比', indicator_id: 'fai_yoy', current_value: 3.5, unit: '%', weight: 0.25, raw_score: 55, contribution: 13.8, direction: '正向', note: '投资增速偏低，制约中期复苏节奏' },
+          { name: '出口金额同比', indicator_id: 'export_yoy', current_value: -2.1, unit: '%', weight: 0.20, raw_score: 35, contribution: 7.0, direction: '负向', note: '出口负增长，外需压制明显' },
+          { name: '进口金额同比', indicator_id: 'import_yoy', current_value: 1.2, unit: '%', weight: 0.10, raw_score: 52, contribution: 5.2, direction: '正向', note: '进口微增，内需有所恢复' },
+          { name: '失业率', indicator_id: 'unemployment_rate', current_value: 5.1, unit: '%', weight: 0.15, raw_score: 80, contribution: 12.0, direction: '正向', note: '就业市场稳定，5.1%处于合理区间' },
+        ],
+        score_formula: '综合得分 = GDP增速(24.0) + 固定投资(13.8) + 出口(7.0) + 进口(5.2) + 失业率(12.0) ≈ 62分',
       },
       long: {
         status: '中性',
@@ -391,6 +424,11 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '人口结构老龄化、债务周期高位等长期因素制约潜在增速，长期中性判断',
         indicators: ['gdp_yoy', 'unemployment_rate'],
         data_quality: 'mock',
+        factors: [
+          { name: 'GDP潜在增速趋势', indicator_id: 'gdp_yoy', current_value: 5.1, unit: '%', weight: 0.60, raw_score: 55, contribution: 33.0, direction: '正向', note: '潜在增速长期下行至4-5%区间，中性' },
+          { name: '劳动力市场结构', indicator_id: 'unemployment_rate', current_value: 5.1, unit: '%', weight: 0.40, raw_score: 42, contribution: 16.8, direction: '负向', note: '老龄化加速，劳动力供给长期收缩' },
+        ],
+        score_formula: '综合得分 = GDP潜在增速(33.0) + 劳动力结构(16.8) ≈ 50分（长期中性基准）',
       },
     },
     // ── 维度2：货币政策信号 ──────────────────────────────────────────────────
@@ -402,9 +440,16 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         status: '宽松',
         score: 75,
         trend: 'up',
-        desc: '1年期LPR=3.1%（历史低位），银行间质押式回购利率DR007=1.8%，中国10年期国债收益率=2.3%，货币政策明确宽松取向',
+        desc: '1年期LPR=3.1%（历史低位），銀行间质押式回购利率DR007=1.8%，中国10年期国债收益率=2.3%，货币政策明确宽松取向',
         indicators: ['lpr_1y', 'lpr_5y', 'dr007', 'dr001', 'shibor_on', 'shibor_1w', 'bond_10y'],
         data_quality: 'mock',
+        factors: [
+          { name: '1年期LPR', indicator_id: 'lpr_1y', current_value: 3.1, unit: '%', weight: 0.30, raw_score: 85, contribution: 25.5, direction: '正向', note: '3.1%处于历史低位，宽松信号明确' },
+          { name: 'DR007质押式回购利率', indicator_id: 'dr007', current_value: 1.8, unit: '%', weight: 0.25, raw_score: 80, contribution: 20.0, direction: '正向', note: '1.8%处于宽松区间，资金面宽裕' },
+          { name: '10年期国债收益率', indicator_id: 'bond_10y', current_value: 2.3, unit: '%', weight: 0.25, raw_score: 75, contribution: 18.8, direction: '正向', note: '2.3%偏低，宽松预期嵌入' },
+          { name: '5年期LPR', indicator_id: 'lpr_5y', current_value: 3.6, unit: '%', weight: 0.20, raw_score: 55, contribution: 11.0, direction: '正向', note: '5年期LPR下降幅度有限，地产宽松空间受限' },
+        ],
+        score_formula: '综合得分 = LPR1Y(25.5) + DR007(20.0) + 国债10Y(18.8) + LPR5Y(11.0) ≈ 75分',
       },
       mid: {
         status: '适度宽松',
@@ -413,6 +458,12 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '实际利率偏低，人民币兑美元中间价=7.25汇率约束限制进一步宽松幅度，中期适度宽松',
         indicators: ['bond_10y', 'rmb_usd', 'lpr_1y'],
         data_quality: 'mock',
+        factors: [
+          { name: '10年期国债收益率', indicator_id: 'bond_10y', current_value: 2.3, unit: '%', weight: 0.40, raw_score: 75, contribution: 30.0, direction: '正向', note: '利率中枢长期下行，中期宽松预期稳固' },
+          { name: '1年期LPR', indicator_id: 'lpr_1y', current_value: 3.1, unit: '%', weight: 0.35, raw_score: 80, contribution: 28.0, direction: '正向', note: '中期宽松周期尚未结束' },
+          { name: '人民币兑美元中间价', indicator_id: 'rmb_usd', current_value: 7.25, unit: '', weight: 0.25, raw_score: 40, contribution: 10.0, direction: '负向', note: '7.25偏弱，汇率压力限制宽松空间' },
+        ],
+        score_formula: '综合得分 = 国债10Y(30.0) + LPR1Y(28.0) + 汇率压力(-10.0拖累) ≈ 68分',
       },
       long: {
         status: '中性',
@@ -421,6 +472,11 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '利率中枢长期下行趋势确立，但债务扩张空间收窄，长期中性',
         indicators: ['bond_10y', 'lpr_1y'],
         data_quality: 'mock',
+        factors: [
+          { name: '10年期国债收益率趋势', indicator_id: 'bond_10y', current_value: 2.3, unit: '%', weight: 0.60, raw_score: 60, contribution: 36.0, direction: '正向', note: '利率长期下行趋势确立，但收益空间收窄' },
+          { name: '1年期LPR趋势', indicator_id: 'lpr_1y', current_value: 3.1, unit: '%', weight: 0.40, raw_score: 47, contribution: 18.8, direction: '负向', note: '长期宽松空间收窄，债务约束增强' },
+        ],
+        score_formula: '综合得分 = 国债趋势(36.0) + LPR趋势(18.8) ≈ 55分',
       },
     },
     // ── 维度3：政策底确认 ────────────────────────────────────────────────────
@@ -435,6 +491,13 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '社会融资规模增量同比多增1.2万亿，新增人民币贷款1.5万亿，财政赤字率提升至4%，专项债加速发行',
         indicators: ['social_finance_new', 'social_finance_yoy', 'new_loans', 'm2_yoy'],
         data_quality: 'mock',
+        factors: [
+          { name: 'M2同比增速', indicator_id: 'm2_yoy', current_value: 7.5, unit: '%', weight: 0.30, raw_score: 72, contribution: 21.6, direction: '正向', note: '7.5%处于合理区间，货币投放力度适中' },
+          { name: '社融存量同比', indicator_id: 'social_finance_yoy', current_value: 8.2, unit: '%', weight: 0.30, raw_score: 75, contribution: 22.5, direction: '正向', note: '8.2%超过名义GDP增速，信用扩张支撑实体' },
+          { name: '新增人民币贷款', indicator_id: 'new_loans', current_value: 1.5, unit: '万亿', weight: 0.25, raw_score: 68, contribution: 17.0, direction: '正向', note: '1.5万亿新增贷款，信贷投放稳健' },
+          { name: '社融增量', indicator_id: 'social_finance_new', current_value: 1.2, unit: '万亿', weight: 0.15, raw_score: 60, contribution: 9.0, direction: '正向', note: '社融增量同比多增，财政发力明显' },
+        ],
+        score_formula: '综合得分 = M2增速(21.6) + 社融存量(22.5) + 新增贷款(17.0) + 社融增量(9.0) ≈ 70分',
       },
       mid: {
         status: '强刺激',
@@ -443,6 +506,12 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '政策组合拳力度超预期（货币+财政+地产），科技+消费双轮驱动，社融存量同比+8.2%，市场预期明显改善',
         indicators: ['social_finance_yoy', 'm2_yoy', 'new_loans'],
         data_quality: 'mock',
+        factors: [
+          { name: '社融存量同比', indicator_id: 'social_finance_yoy', current_value: 8.2, unit: '%', weight: 0.40, raw_score: 85, contribution: 34.0, direction: '正向', note: '8.2%超预期，政策信用扩张力度大' },
+          { name: 'M2同比增速', indicator_id: 'm2_yoy', current_value: 7.5, unit: '%', weight: 0.35, raw_score: 78, contribution: 27.3, direction: '正向', note: '货币供给充裕，中期政策底确认' },
+          { name: '新增人民币贷款', indicator_id: 'new_loans', current_value: 1.5, unit: '万亿', weight: 0.25, raw_score: 67, contribution: 16.8, direction: '正向', note: '信贷投放持续强劲，实体经济支撑力度大' },
+        ],
+        score_formula: '综合得分 = 社融存量(34.0) + M2(27.3) + 新增贷款(16.8) ≈ 78分',
       },
       long: {
         status: '中性',
@@ -451,6 +520,11 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '结构性改革持续推进，但外部环境不确定性和债务约束限制长期政策空间',
         indicators: ['social_finance_yoy', 'm2_yoy'],
         data_quality: 'mock',
+        factors: [
+          { name: '社融存量同比趋势', indicator_id: 'social_finance_yoy', current_value: 8.2, unit: '%', weight: 0.55, raw_score: 55, contribution: 30.3, direction: '正向', note: '长期信用扩张受债务天花板制约' },
+          { name: 'M2同比趋势', indicator_id: 'm2_yoy', current_value: 7.5, unit: '%', weight: 0.45, raw_score: 48, contribution: 21.6, direction: '负向', note: 'M2增速长期下行趋势，货币政策空间收窄' },
+        ],
+        score_formula: '综合得分 = 社融趋势(30.3) + M2趋势(21.6) ≈ 52分',
       },
     },
     // ── 维度4：流动性环境 ────────────────────────────────────────────────────
@@ -466,6 +540,13 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: 'M2同比增速7.5%，全A日成交额1.2万亿，北向资金净流入+85亿，上交所融资余额1.85万亿，资金面活跃',
         indicators: ['m2_yoy', 'total_market_turnover', 'north_net_flow', 'north_daily_turnover', 'margin_balance_sh', 'margin_balance_sz'],
         data_quality: 'mock',
+        factors: [
+          { name: '全A日成交额', indicator_id: 'total_market_turnover', current_value: 1.2, unit: '万亿', weight: 0.30, raw_score: 80, contribution: 24.0, direction: '正向', note: '1.2万亿处于活跃区间，市场参与度高' },
+          { name: 'M2同比增速', indicator_id: 'm2_yoy', current_value: 7.5, unit: '%', weight: 0.25, raw_score: 72, contribution: 18.0, direction: '正向', note: '货币供给充裕，市场流动性有支撑' },
+          { name: '北向资金净流入', indicator_id: 'north_net_flow', current_value: 85, unit: '亿', weight: 0.25, raw_score: 75, contribution: 18.8, direction: '正向', note: '+85亿净流入，外资情绪积极' },
+          { name: '融资余额', indicator_id: 'margin_balance_sh', current_value: 1.85, unit: '万亿', weight: 0.20, raw_score: 55, contribution: 11.0, direction: '正向', note: '1.85万亿融资余额，杠杆资金活跃' },
+        ],
+        score_formula: '综合得分 = 成交额(24.0) + M2(18.0) + 北向资金(18.8) + 融资余额(11.0) ≈ 72分',
       },
       mid: {
         status: '适度充裕',
@@ -474,6 +555,12 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '社融存量同比8.2%，北向当日成交总额占全A比例6.8%，中期流动性适度充裕，支撑市场运行',
         indicators: ['social_finance_yoy', 'north_daily_turnover', 'm2_yoy'],
         data_quality: 'mock',
+        factors: [
+          { name: '社融存量同比', indicator_id: 'social_finance_yoy', current_value: 8.2, unit: '%', weight: 0.40, raw_score: 75, contribution: 30.0, direction: '正向', note: '社融支撑中期流动性充裕' },
+          { name: 'M2同比增速', indicator_id: 'm2_yoy', current_value: 7.5, unit: '%', weight: 0.35, raw_score: 65, contribution: 22.8, direction: '正向', note: '货币供给适度，中期流动性平衡' },
+          { name: '北向当日成交额占比', indicator_id: 'north_daily_turnover', current_value: 6.8, unit: '%', weight: 0.25, raw_score: 48, contribution: 12.0, direction: '负向', note: '6.8%占比偏低，外资中期参与度有限' },
+        ],
+        score_formula: '综合得分 = 社融(30.0) + M2(22.8) + 北向占比(12.0) ≈ 65分',
       },
       long: {
         status: '中性',
@@ -482,6 +569,12 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '人民币国际化推进，但资本账户管制限制外资长期流入规模，长期中性',
         indicators: ['m2_yoy', 'rmb_usd', 'north_daily_turnover'],
         data_quality: 'mock',
+        factors: [
+          { name: 'M2增速长期趋势', indicator_id: 'm2_yoy', current_value: 7.5, unit: '%', weight: 0.50, raw_score: 58, contribution: 29.0, direction: '正向', note: 'M2长期中枢下行，流动性中性' },
+          { name: '人民币汇率趋势', indicator_id: 'rmb_usd', current_value: 7.25, unit: '', weight: 0.30, raw_score: 42, contribution: 12.6, direction: '负向', note: '资本账户管制限制外资长期流入' },
+          { name: '北向资金流向趋势', indicator_id: 'north_daily_turnover', current_value: 6.8, unit: '%', weight: 0.20, raw_score: 67, contribution: 13.4, direction: '正向', note: '外资长期配置有限增加空间' },
+        ],
+        score_formula: '综合得分 = M2趋势(29.0) + 汇率拖累(12.6) + 北向趋势(13.4) ≈ 55分',
       },
     },
     // ── 维度5：外部环境 ──────────────────────────────────────────────────────
@@ -496,6 +589,13 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '人民币兑美元中间价7.25，中国贸易差额收窄，关税摩擦升温，外部冲击处于可控但偏压状态',
         indicators: ['rmb_usd', 'trade_balance', 'export_yoy', 'import_yoy'],
         data_quality: 'mock',
+        factors: [
+          { name: '人民币兑美元中间价', indicator_id: 'rmb_usd', current_value: 7.25, unit: '', weight: 0.35, raw_score: 35, contribution: 12.3, direction: '负向', note: '7.25偏弱，汇率压力引发资本外流风险' },
+          { name: '出口金额同比', indicator_id: 'export_yoy', current_value: -2.1, unit: '%', weight: 0.35, raw_score: 30, contribution: 10.5, direction: '负向', note: '出口负增长，外需弱化明显' },
+          { name: '贸易差额', indicator_id: 'trade_balance', current_value: 680, unit: '亿美元', weight: 0.20, raw_score: 65, contribution: 13.0, direction: '正向', note: '贸顺差仍保持正常，对冲汇率压力' },
+          { name: '进口金额同比', indicator_id: 'import_yoy', current_value: 1.2, unit: '%', weight: 0.10, raw_score: 50, contribution: 5.0, direction: '中性', note: '进口微增，内需恢复信号弱' },
+        ],
+        score_formula: '综合得分 = 汇率压力(12.3) + 出口负增(10.5) + 贸顺差支撑(13.0) + 进口(5.0) ≈ 45分',
       },
       mid: {
         status: '中性',
@@ -504,6 +604,12 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '贸易多元化布局推进，东南亚出口替代效应显现，中期外部压力边际缓解',
         indicators: ['trade_balance', 'export_yoy', 'import_yoy', 'rmb_usd'],
         data_quality: 'mock',
+        factors: [
+          { name: '贸易差额趋势', indicator_id: 'trade_balance', current_value: 680, unit: '亿美元', weight: 0.35, raw_score: 65, contribution: 22.8, direction: '正向', note: '贸顺差中期持续，多元化布局下出口韧性增强' },
+          { name: '出口金额同比', indicator_id: 'export_yoy', current_value: -2.1, unit: '%', weight: 0.35, raw_score: 45, contribution: 15.8, direction: '负向', note: '中期出口恢复预期温和，替代市场开拓中' },
+          { name: '人民币汇率趋势', indicator_id: 'rmb_usd', current_value: 7.25, unit: '', weight: 0.30, raw_score: 38, contribution: 11.4, direction: '负向', note: '汇率中期稳定预期，压力边际缓解' },
+        ],
+        score_formula: '综合得分 = 贸顺差(22.8) + 出口恢复(15.8) + 汇率稳定(11.4) ≈ 50分',
       },
       long: {
         status: '中性',
@@ -512,6 +618,12 @@ export const MACRO_MATRIX_CN: MacroMatrix = {
         desc: '全球化格局重塑，中国在全球供应链中的地位调整是长期变量，中性判断',
         indicators: ['trade_balance', 'export_yoy', 'rmb_usd'],
         data_quality: 'mock',
+        factors: [
+          { name: '贸易差额长期趋势', indicator_id: 'trade_balance', current_value: 680, unit: '亿美元', weight: 0.40, raw_score: 55, contribution: 22.0, direction: '正向', note: '全球化重塑下贸顺差长期不确定性增强' },
+          { name: '出口结构调整', indicator_id: 'export_yoy', current_value: -2.1, unit: '%', weight: 0.35, raw_score: 42, contribution: 14.7, direction: '负向', note: '全球供应链重塑，长期出口结构调整中' },
+          { name: '人民币汇率长期趋势', indicator_id: 'rmb_usd', current_value: 7.25, unit: '', weight: 0.25, raw_score: 45, contribution: 11.3, direction: '中性', note: '人民币汇率长期中性，国际化进程渐进' },
+        ],
+        score_formula: '综合得分 = 贸顺差趋势(22.0) + 出口结构(14.7) + 汇率长期(11.3) ≈ 48分',
       },
     },
   ],
