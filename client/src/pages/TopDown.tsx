@@ -36,7 +36,7 @@ import {
 } from '@/data/topdown-mock';
 import {
   fetchSectorList, fetchSectorHistory, fetchSectorStocks,
-  fetchMacroSnapshot, fetchIndexSnapshot, fetchRealMacroMatrix,
+  fetchMacroSnapshot, fetchIndexSnapshot, fetchRealMacroMatrix, fetchRealMacroMatrixUS,
   type RealSectorMeta, type RealSectorDaily,
   type MacroIndicatorValue, type IndexDailyBar,
   type RealMacroMatrix, type RealMatrixCell,
@@ -351,23 +351,28 @@ function CellExpandPanel({ cell, dimension, period }: {
 function MacroPanel({ onNext }: { onNext: () => void }) {
   const [region, setRegion] = useState<MatrixRegion>('CN');
   const [expandedCell, setExpandedCell] = useState<string | null>(null);
-  // 真实数据矩阵（CN）
-  const [realMatrix, setRealMatrix] = useState<RealMacroMatrix | null>(null);
+  // 真实数据矩阵（CN + US 均接入真实数据）
+  const [realMatrixCN, setRealMatrixCN] = useState<RealMacroMatrix | null>(null);
+  const [realMatrixUS, setRealMatrixUS] = useState<RealMacroMatrix | null>(null);
   const [matrixLoading, setMatrixLoading] = useState(false);
   const [matrixError, setMatrixError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (region !== 'CN') return; // US 矩阵暂保留 Mock
     setMatrixLoading(true);
     setMatrixError(null);
-    fetchRealMacroMatrix()
-      .then(m => setRealMatrix(m))
+    const fetcher = region === 'CN' ? fetchRealMacroMatrix() : fetchRealMacroMatrixUS();
+    fetcher
+      .then(m => {
+        if (region === 'CN') setRealMatrixCN(m);
+        else setRealMatrixUS(m);
+      })
       .catch(e => setMatrixError(e.message))
       .finally(() => setMatrixLoading(false));
   }, [region]);
 
-  // 如果 CN 真实数据已加载，使用真实数据；否则回退到 Mock
-  const matrix = (region === 'CN' && realMatrix) ? realMatrix : (region === 'CN' ? MACRO_MATRIX_CN : MACRO_MATRIX_US);
+  // 优先使用真实数据，回退到 Mock（保留 Mock 作为应急备份）
+  const realMatrix = region === 'CN' ? realMatrixCN : realMatrixUS;
+  const matrix = realMatrix ?? (region === 'CN' ? MACRO_MATRIX_CN : MACRO_MATRIX_US);
 
   const periods: { key: 'short' | 'mid' | 'long'; label: string; sub: string }[] = [
     { key: 'short', label: '短期', sub: '3-9 个月' },
@@ -424,11 +429,11 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
           {!matrixLoading && matrixError && (
             <span className="text-[10px] text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded font-medium" title={matrixError}>⚠ 数据异常</span>
           )}
-          {!matrixLoading && !matrixError && region === 'CN' && realMatrix && (
+          {!matrixLoading && !matrixError && realMatrix && (
             <span className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">✓ 真实数据</span>
           )}
-          {!matrixLoading && !matrixError && (region === 'US' || !realMatrix) && (
-            <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">⚠ Mock 数据</span>
+          {!matrixLoading && !matrixError && !realMatrix && (
+            <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">⚠ Mock 备份</span>
           )}
         </div>
       </div>

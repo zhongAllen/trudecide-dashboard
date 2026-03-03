@@ -295,7 +295,11 @@ export async function fetchMacroSnapshot(): Promise<MacroIndicatorValue[]> {
     // 市场情绪
     { id: 'margin_balance_sh', region: 'CN', name_cn: '沪融资余额', unit: '元' },
     { id: 'margin_balance_sz', region: 'CN', name_cn: '深融资余额', unit: '元' },
-    { id: 'north_daily_turnover', region: 'CN', name_cn: '北向成交额', unit: '亿元' },
+    // 北向资金：净流入数据暂无（north_net_flow 已废弃，新口径未采集）
+    // 替代方案：展示北向成交额（反映外资活跃度）+ 占全A比例（反映外资参与度）
+    // 注：北向成交额单位为万元，341542万元 = 34.15亿元（展示时除以10000）
+    { id: 'north_daily_turnover',       region: 'CN', name_cn: '北向成交额(替代)', unit: '亿元' },
+    { id: 'north_turnover_ratio_daily', region: 'CN', name_cn: '北向占全A比例', unit: '%' },
     { id: 'vix',         region: 'GL', name_cn: 'VIX恐慷指数',     unit: '' },
     // 估值
     { id: 'hs300_pb',    region: 'CN', name_cn: '沪深300 PB',       unit: '' },
@@ -907,6 +911,420 @@ export async function fetchRealMacroMatrix(): Promise<RealMacroMatrix> {
             { name: '出口结构调整', indicator_id: 'export_yoy', current_value: v['export_yoy'], unit: '%', weight: 0.55, raw_score: 40, contribution: 22.0, direction: '负向', note: '全球供应链重塑，长期出口结构调整中（定性判断）' },
           ],
           score_formula: `综合得分 = 贸顺差趋势(24.8) + 出口结构(22.0) = ${d5l_score}分（长期定性基准）`,
+        },
+      },
+    ],
+    summary: {
+      short: {
+        status: scoreToStatus(sumShort, '偏多', '中性', '偏空'),
+        score: sumShort,
+        trend: scoreToTrend(sumShort),
+        desc: `短期综合评分 = (经济${d1s_score} + 货币${d2s_score} + 政策${d3s_score} + 流动性${d4s_score} + 外部${d5s_score}) / 5 = ${sumShort}分`,
+        indicators: [],
+        data_quality: 'live',
+        factors: [],
+        score_formula: `五维度均权平均：(${d1s_score}+${d2s_score}+${d3s_score}+${d4s_score}+${d5s_score})/5 = ${sumShort}分`,
+      },
+      mid: {
+        status: scoreToStatus(sumMid, '偏多', '中性', '偏空'),
+        score: sumMid,
+        trend: scoreToTrend(sumMid),
+        desc: `中期综合评分 = (经济${d1m_score} + 货币${d2m_score} + 政策${d3m_score} + 流动性${d4m_score} + 外部${d5m_score}) / 5 = ${sumMid}分`,
+        indicators: [],
+        data_quality: 'live',
+        factors: [],
+        score_formula: `五维度均权平均：(${d1m_score}+${d2m_score}+${d3m_score}+${d4m_score}+${d5m_score})/5 = ${sumMid}分`,
+      },
+      long: {
+        status: scoreToStatus(sumLong, '偏多', '中性', '偏空'),
+        score: sumLong,
+        trend: scoreToTrend(sumLong),
+        desc: `长期综合评分 = (经济${d1l_score} + 货币${d2l_score} + 政策${d3l_score} + 流动性${d4l_score} + 外部${d5l_score}) / 5 = ${sumLong}分（含定性判断维度）`,
+        indicators: [],
+        data_quality: 'warn',
+        factors: [],
+        score_formula: `五维度均权平均：(${d1l_score}+${d2l_score}+${d3l_score}+${d4l_score}+${d5l_score})/5 = ${sumLong}分`,
+      },
+    },
+  };
+
+  return matrix;
+}
+
+/**
+ * 计算 US 宏观状态矩阵（真实数据驱动）
+ *
+ * 评分规则详见 docs/macro_matrix_scoring_rules.md (REQ-159)
+ * 所有指标值来自 indicator_values 表，region='US'
+ *
+ * US 矩阵维度与 CN 矩阵相同（5维度×3周期），但指标和阈值针对美国经济校准：
+ *   - 经济周期：PMI(ISM) / GDP / 工业产出 / 零售 / 失业率
+ *   - 货币政策：联邦基金利率 / 10年国债 / M2
+ *   - 政策底确认：M2 / 信贷脉冲（暂无，用 M2 替代）
+ *   - 流动性环境：标普500 / 纳斯达克 / M2
+ *   - 外部环境：贸易差额 / 出口 / 美元指数（暂无，用 bond_10y 替代）
+ */
+export async function fetchRealMacroMatrixUS(): Promise<RealMacroMatrix> {
+  // ── 1. 批量拉取所有需要的 US 指标最新值 ────────────────────────────────────
+  const indicatorIds = [
+    'pmi_mfg', 'pmi_non_mfg', 'gdp_yoy', 'gdp_qoq', 'industrial_yoy',
+    'retail_yoy', 'unemployment_rate', 'fed_funds_rate', 'bond_10y',
+    'm2_yoy', 'cpi_yoy', 'ppi_yoy', 'trade_balance',
+    'sp500', 'nasdaq', 'equity_pe_etf', 'equity_pb_etf',
+    'export_yoy', 'import_yoy',
+  ];
+
+  const rows = await Promise.all(
+    indicatorIds.map(async id => {
+      const { data } = await supabase
+        .from('indicator_values')
+        .select('indicator_id, trade_date, value')
+        .eq('indicator_id', id)
+        .eq('region', 'US')
+        .order('trade_date', { ascending: false })
+        .limit(1);
+      return { id, value: data?.[0]?.value ?? null, date: data?.[0]?.trade_date ?? null };
+    })
+  );
+
+  const v: Record<string, number | null> = {};
+  rows.forEach(r => { v[r.id] = r.value; });
+
+  const snapshotDate = rows.find(r => r.date)?.date?.slice(0, 7).replace('-', '') ?? '202603';
+
+  // ── 2. 按规则计算各维度各周期得分 ────────────────────────────────────────
+  // 美国 PMI 使用 ISM 口径，中性线同为 50
+
+  // ── 维度1：经济周期位置 ──────────────────────────────────────────────────
+  // 短期：ISM制造业PMI + 服务业PMI + GDP环比 + 工业产出 + 零售
+  const d1s_pmi_mfg    = mapToScore(v['pmi_mfg'],       [48, 49.5, 51, 53],    'pos');
+  const d1s_pmi_non    = mapToScore(v['pmi_non_mfg'],   [49, 51, 53, 55],      'pos');
+  const d1s_gdp_qoq    = mapToScore(v['gdp_qoq'],       [0, 1.0, 2.0, 3.0],   'pos');
+  const d1s_industrial = mapToScore(v['industrial_yoy'],[0, 1.5, 3, 5],        'pos');
+  const d1s_retail     = mapToScore(v['retail_yoy'],    [0, 2, 4, 6],          'pos');
+  const d1s_score = Math.round(d1s_pmi_mfg*0.3 + d1s_pmi_non*0.2 + d1s_gdp_qoq*0.25 + d1s_industrial*0.15 + d1s_retail*0.1);
+
+  // 中期：GDP同比 + 工业产出 + 零售 + 失业率 + 出口
+  const d1m_gdp        = mapToScore(v['gdp_yoy'],       [0.5, 1.5, 2.5, 3.5], 'pos');
+  const d1m_industrial = mapToScore(v['industrial_yoy'],[0, 1.5, 3, 5],        'pos');
+  const d1m_retail     = mapToScore(v['retail_yoy'],    [0, 2, 4, 6],          'pos');
+  const d1m_unemp      = mapToScore(v['unemployment_rate'], [5.5, 4.5, 4.0, 3.5], 'neg');
+  const d1m_export     = mapToScore(v['export_yoy'],    [-5, 0, 3, 7],         'pos');
+  const d1m_score = Math.round(d1m_gdp*0.3 + d1m_industrial*0.2 + d1m_retail*0.2 + d1m_unemp*0.2 + d1m_export*0.1);
+
+  // 长期：人口增长放缓 + 债务高位，定性基础分
+  const d1l_score = 50;
+
+  // ── 维度2：货币政策信号 ──────────────────────────────────────────────────
+  // 美联储：低利率=宽松=利好股市（负向映射）
+  // 短期：联邦基金利率 + 10年国债 + M2同比
+  const d2s_fed    = mapToScore(v['fed_funds_rate'], [5.5, 4.5, 3.5, 2.5], 'neg');
+  const d2s_bond   = mapToScore(v['bond_10y'],       [5.0, 4.5, 4.0, 3.5], 'neg');
+  const d2s_m2     = mapToScore(v['m2_yoy'],         [2, 4, 6, 8],          'pos');
+  const d2s_score  = Math.round(d2s_fed*0.4 + d2s_bond*0.35 + d2s_m2*0.25);
+
+  // 中期：联邦基金利率 + 10年国债 + 实际利率（名义-CPI）
+  const d2m_fed    = mapToScore(v['fed_funds_rate'], [5.5, 4.5, 3.5, 2.5], 'neg');
+  const d2m_bond   = mapToScore(v['bond_10y'],       [5.0, 4.5, 4.0, 3.5], 'neg');
+  // 实际利率 = bond_10y - cpi_yoy（正实际利率越高，对股市越不利）
+  const realRate   = (v['bond_10y'] ?? 4.0) - (v['cpi_yoy'] ?? 2.5);
+  const d2m_real   = mapToScore(realRate, [3, 2, 1, 0], 'neg');
+  const d2m_score  = Math.round(d2m_fed*0.35 + d2m_bond*0.35 + d2m_real*0.30);
+
+  // 长期：利率中枢结构性变化，定性基础分
+  const d2l_score  = 48;
+
+  // ── 维度3：政策底确认 ────────────────────────────────────────────────────
+  // 美国：财政政策 + M2 + 信贷（暂无信贷数据，用 M2 替代）
+  // 短期：M2同比 + CPI（通胀下行=降息空间=利好）
+  const d3s_m2     = mapToScore(v['m2_yoy'],  [2, 4, 6, 8],   'pos');
+  // CPI 下行（接近2%目标）= 降息空间更大 = 利好
+  const d3s_cpi    = mapToScore(v['cpi_yoy'], [4, 3, 2.5, 2], 'neg');
+  const d3s_score  = Math.round(d3s_m2*0.5 + d3s_cpi*0.5);
+
+  // 中期：M2 + CPI + PPI
+  const d3m_m2     = mapToScore(v['m2_yoy'],  [2, 4, 6, 8],   'pos');
+  const d3m_cpi    = mapToScore(v['cpi_yoy'], [4, 3, 2.5, 2], 'neg');
+  const d3m_ppi    = mapToScore(v['ppi_yoy'], [4, 3, 2, 1],   'neg');
+  const d3m_score  = Math.round(d3m_m2*0.4 + d3m_cpi*0.35 + d3m_ppi*0.25);
+
+  // 长期：财政赤字约束，定性基础分
+  const d3l_score  = 45;
+
+  // ── 维度4：流动性环境 ────────────────────────────────────────────────────
+  // 短期：标普500趋势（用估值代替）+ M2 + 市场PE
+  // equity_pe_etf 越低越好（便宜），越高越贵
+  const d4s_pe     = mapToScore(v['equity_pe_etf'], [30, 25, 20, 15], 'neg');
+  const d4s_pb     = mapToScore(v['equity_pb_etf'], [3.0, 2.5, 2.0, 1.5], 'neg');
+  const d4s_m2     = mapToScore(v['m2_yoy'],        [2, 4, 6, 8],    'pos');
+  const d4s_score  = Math.round(d4s_pe*0.35 + d4s_pb*0.30 + d4s_m2*0.35);
+
+  // 中期：M2 + 市场估值
+  const d4m_m2     = mapToScore(v['m2_yoy'],        [2, 4, 6, 8],    'pos');
+  const d4m_pe     = mapToScore(v['equity_pe_etf'], [30, 25, 20, 15], 'neg');
+  const d4m_score  = Math.round(d4m_m2*0.5 + d4m_pe*0.5);
+
+  // 长期：美元霸权 + 全球资本流动，定性基础分
+  const d4l_score  = 55;
+
+  // ── 维度5：外部环境 ──────────────────────────────────────────────────────
+  // 短期：贸易差额 + 出口 + 进口（进口强 = 内需强 = 利好）
+  // 美国贸易差额为负数（逆差），越接近0越好
+  const d5s_trade  = mapToScore(v['trade_balance'], [-100000, -80000, -60000, -40000], 'pos');
+  const d5s_export = mapToScore(v['export_yoy'],    [-5, 0, 3, 7],  'pos');
+  const d5s_import = mapToScore(v['import_yoy'],    [-5, 0, 3, 7],  'pos');
+  const d5s_score  = Math.round(d5s_trade*0.3 + d5s_export*0.35 + d5s_import*0.35);
+
+  // 中期：贸易差额 + 出口 + 进口
+  const d5m_trade  = mapToScore(v['trade_balance'], [-100000, -80000, -60000, -40000], 'pos');
+  const d5m_export = mapToScore(v['export_yoy'],    [-5, 0, 3, 7],  'pos');
+  const d5m_score  = Math.round(d5m_trade*0.4 + d5m_export*0.6);
+
+  // 长期：美元储备货币地位，定性基础分
+  const d5l_score  = 58;
+
+  // ── 综合评估 ─────────────────────────────────────────────────────────────
+  const sumShort = Math.round((d1s_score + d2s_score + d3s_score + d4s_score + d5s_score) / 5);
+  const sumMid   = Math.round((d1m_score + d2m_score + d3m_score + d4m_score + d5m_score) / 5);
+  const sumLong  = Math.round((d1l_score + d2l_score + d3l_score + d4l_score + d5l_score) / 5);
+
+  // ── 3. 构建矩阵对象 ───────────────────────────────────────────────────────
+  const fmt = (val: number | null, unit: string) => val !== null ? `${val}${unit}` : '暂无数据';
+
+  const matrix: RealMacroMatrix = {
+    region: 'US',
+    snapshot_date: snapshotDate,
+    model_version: 'v1-live',
+    rows: [
+      // ── 维度1：经济周期位置 ────────────────────────────────────────────
+      {
+        dimension: '经济周期位置',
+        a_stock_corr: '弱相关',
+        short: {
+          status: scoreToStatus(d1s_score, '扩张', '温和', '收缩'),
+          score: d1s_score,
+          trend: scoreToTrend(d1s_score),
+          desc: `ISM制造业PMI=${fmt(v['pmi_mfg'],'点')}，服务业PMI=${fmt(v['pmi_non_mfg'],'点')}，GDP环比年化=${fmt(v['gdp_qoq'],'%')}，工业产出同比=${fmt(v['industrial_yoy'],'%')}，零售同比=${fmt(v['retail_yoy'],'%')}`,
+          indicators: ['pmi_mfg', 'pmi_non_mfg', 'gdp_qoq', 'industrial_yoy', 'retail_yoy'],
+          data_quality: 'live',
+          factors: [
+            { name: 'ISM制造业PMI', indicator_id: 'pmi_mfg', current_value: v['pmi_mfg'], unit: '点', weight: 0.30, raw_score: d1s_pmi_mfg, contribution: +(d1s_pmi_mfg*0.3).toFixed(1), direction: '正向', note: '50为荣枯线，>51为扩张，<49为收缩；ISM口径通常略高于CN PMI' },
+            { name: '服务业PMI', indicator_id: 'pmi_non_mfg', current_value: v['pmi_non_mfg'], unit: '点', weight: 0.20, raw_score: d1s_pmi_non, contribution: +(d1s_pmi_non*0.2).toFixed(1), direction: '正向', note: '美国服务业占GDP约80%，权重极高' },
+            { name: 'GDP环比年化增速', indicator_id: 'gdp_qoq', current_value: v['gdp_qoq'], unit: '%', weight: 0.25, raw_score: d1s_gdp_qoq, contribution: +(d1s_gdp_qoq*0.25).toFixed(1), direction: '正向', note: '美国GDP惯用环比年化口径，>2%为健康增长' },
+            { name: '工业产出同比', indicator_id: 'industrial_yoy', current_value: v['industrial_yoy'], unit: '%', weight: 0.15, raw_score: d1s_industrial, contribution: +(d1s_industrial*0.15).toFixed(1), direction: '正向', note: '制造业产出，>3%为健康' },
+            { name: '零售销售同比', indicator_id: 'retail_yoy', current_value: v['retail_yoy'], unit: '%', weight: 0.10, raw_score: d1s_retail, contribution: +(d1s_retail*0.1).toFixed(1), direction: '正向', note: '消费支出是美国经济最大驱动力，>4%为强劲' },
+          ],
+          score_formula: `综合得分 = ISM制造(${(d1s_pmi_mfg*0.3).toFixed(1)}) + 服务业PMI(${(d1s_pmi_non*0.2).toFixed(1)}) + GDP环比(${(d1s_gdp_qoq*0.25).toFixed(1)}) + 工业产出(${(d1s_industrial*0.15).toFixed(1)}) + 零售(${(d1s_retail*0.1).toFixed(1)}) = ${d1s_score}分`,
+        },
+        mid: {
+          status: scoreToStatus(d1m_score, '复苏', '中性', '放缓'),
+          score: d1m_score,
+          trend: scoreToTrend(d1m_score),
+          desc: `GDP同比=${fmt(v['gdp_yoy'],'%')}，工业产出同比=${fmt(v['industrial_yoy'],'%')}，零售同比=${fmt(v['retail_yoy'],'%')}，失业率=${fmt(v['unemployment_rate'],'%')}`,
+          indicators: ['gdp_yoy', 'industrial_yoy', 'retail_yoy', 'unemployment_rate', 'export_yoy'],
+          data_quality: 'live',
+          factors: [
+            { name: 'GDP同比增速', indicator_id: 'gdp_yoy', current_value: v['gdp_yoy'], unit: '%', weight: 0.30, raw_score: d1m_gdp, contribution: +(d1m_gdp*0.3).toFixed(1), direction: '正向', note: '美国GDP同比，>2%为健康，<1%有衰退风险' },
+            { name: '工业产出同比', indicator_id: 'industrial_yoy', current_value: v['industrial_yoy'], unit: '%', weight: 0.20, raw_score: d1m_industrial, contribution: +(d1m_industrial*0.2).toFixed(1), direction: '正向', note: '中期工业生产趋势' },
+            { name: '零售销售同比', indicator_id: 'retail_yoy', current_value: v['retail_yoy'], unit: '%', weight: 0.20, raw_score: d1m_retail, contribution: +(d1m_retail*0.2).toFixed(1), direction: '正向', note: '消费支出中期趋势' },
+            { name: '失业率', indicator_id: 'unemployment_rate', current_value: v['unemployment_rate'], unit: '%', weight: 0.20, raw_score: d1m_unemp, contribution: +(d1m_unemp*0.2).toFixed(1), direction: '负向', note: '<4%为充分就业，>5%有衰退信号' },
+            { name: '出口同比', indicator_id: 'export_yoy', current_value: v['export_yoy'], unit: '%', weight: 0.10, raw_score: d1m_export, contribution: +(d1m_export*0.1).toFixed(1), direction: '正向', note: '外需对美国GDP贡献相对较小' },
+          ],
+          score_formula: `综合得分 = GDP同比(${(d1m_gdp*0.3).toFixed(1)}) + 工业产出(${(d1m_industrial*0.2).toFixed(1)}) + 零售(${(d1m_retail*0.2).toFixed(1)}) + 失业率(${(d1m_unemp*0.2).toFixed(1)}) + 出口(${(d1m_export*0.1).toFixed(1)}) = ${d1m_score}分`,
+        },
+        long: {
+          status: '中性',
+          score: d1l_score,
+          trend: 'flat',
+          desc: '美国长期潜在增速约2%，人口增长放缓、债务高位（GDP的120%+）制约长期扩张空间，中性判断（定性评估，v1基础分50）',
+          indicators: ['gdp_yoy', 'unemployment_rate'],
+          data_quality: 'warn',
+          factors: [
+            { name: 'GDP潜在增速趋势', indicator_id: 'gdp_yoy', current_value: v['gdp_yoy'], unit: '%', weight: 0.60, raw_score: 50, contribution: 30.0, direction: '正向', note: '长期潜在增速约2%，中性' },
+            { name: '劳动力市场结构', indicator_id: 'unemployment_rate', current_value: v['unemployment_rate'], unit: '%', weight: 0.40, raw_score: 50, contribution: 20.0, direction: '负向', note: '充分就业但劳动参与率长期下行（定性判断）' },
+          ],
+          score_formula: `综合得分 = GDP潜在增速(30.0) + 劳动力结构(20.0) = ${d1l_score}分（长期定性基准）`,
+        },
+      },
+      // ── 维度2：货币政策信号 ────────────────────────────────────────────
+      {
+        dimension: '货币政策信号',
+        a_stock_corr: '正相关',
+        short: {
+          status: scoreToStatus(d2s_score, '宽松', '中性', '紧缩'),
+          score: d2s_score,
+          trend: scoreToTrend(d2s_score),
+          desc: `联邦基金利率=${fmt(v['fed_funds_rate'],'%')}，10年国债=${fmt(v['bond_10y'],'%')}，M2同比=${fmt(v['m2_yoy'],'%')}`,
+          indicators: ['fed_funds_rate', 'bond_10y', 'm2_yoy'],
+          data_quality: 'live',
+          factors: [
+            { name: '联邦基金利率', indicator_id: 'fed_funds_rate', current_value: v['fed_funds_rate'], unit: '%', weight: 0.40, raw_score: d2s_fed, contribution: +(d2s_fed*0.4).toFixed(1), direction: '负向', note: '<3.5%为宽松，>5%为紧缩；当前处于降息通道' },
+            { name: '10年期国债收益率', indicator_id: 'bond_10y', current_value: v['bond_10y'], unit: '%', weight: 0.35, raw_score: d2s_bond, contribution: +(d2s_bond*0.35).toFixed(1), direction: '负向', note: '<4%对股市友好，>5%有压制；反映市场对通胀和增长的预期' },
+            { name: 'M2货币供应同比', indicator_id: 'm2_yoy', current_value: v['m2_yoy'], unit: '%', weight: 0.25, raw_score: d2s_m2, contribution: +(d2s_m2*0.25).toFixed(1), direction: '正向', note: '>6%为宽松，<2%为紧缩' },
+          ],
+          score_formula: `综合得分 = 联邦利率(${(d2s_fed*0.4).toFixed(1)}) + 10年国债(${(d2s_bond*0.35).toFixed(1)}) + M2(${(d2s_m2*0.25).toFixed(1)}) = ${d2s_score}分`,
+        },
+        mid: {
+          status: scoreToStatus(d2m_score, '宽松', '中性', '紧缩'),
+          score: d2m_score,
+          trend: scoreToTrend(d2m_score),
+          desc: `联邦基金利率=${fmt(v['fed_funds_rate'],'%')}，10年国债=${fmt(v['bond_10y'],'%')}，实际利率≈${((v['bond_10y']??4.0)-(v['cpi_yoy']??2.5)).toFixed(2)}%`,
+          indicators: ['fed_funds_rate', 'bond_10y', 'cpi_yoy'],
+          data_quality: 'live',
+          factors: [
+            { name: '联邦基金利率', indicator_id: 'fed_funds_rate', current_value: v['fed_funds_rate'], unit: '%', weight: 0.35, raw_score: d2m_fed, contribution: +(d2m_fed*0.35).toFixed(1), direction: '负向', note: '中期利率路径决定股市估值中枢' },
+            { name: '10年期国债收益率', indicator_id: 'bond_10y', current_value: v['bond_10y'], unit: '%', weight: 0.35, raw_score: d2m_bond, contribution: +(d2m_bond*0.35).toFixed(1), direction: '负向', note: '中期无风险利率基准' },
+            { name: '实际利率（名义-CPI）', indicator_id: 'cpi_yoy', current_value: realRate, unit: '%', weight: 0.30, raw_score: d2m_real, contribution: +(d2m_real*0.3).toFixed(1), direction: '负向', note: '实际利率>2%对股市有明显压制；<1%为宽松环境' },
+          ],
+          score_formula: `综合得分 = 联邦利率(${(d2m_fed*0.35).toFixed(1)}) + 10年国债(${(d2m_bond*0.35).toFixed(1)}) + 实际利率(${(d2m_real*0.3).toFixed(1)}) = ${d2m_score}分`,
+        },
+        long: {
+          status: '中性',
+          score: d2l_score,
+          trend: 'flat',
+          desc: '美联储长期利率中枢预计在2.5-3.5%区间，高于疫情前的0-2.5%，利率中枢上移对估值有长期压制，中性偏空（定性评估，v1基础分48）',
+          indicators: ['fed_funds_rate', 'bond_10y'],
+          data_quality: 'warn',
+          factors: [
+            { name: '利率中枢趋势', indicator_id: 'fed_funds_rate', current_value: v['fed_funds_rate'], unit: '%', weight: 0.60, raw_score: 45, contribution: 27.0, direction: '负向', note: '长期利率中枢上移至2.5-3.5%，高于疫情前（定性判断）' },
+            { name: '债务可持续性', indicator_id: 'bond_10y', current_value: v['bond_10y'], unit: '%', weight: 0.40, raw_score: 52, contribution: 20.8, direction: '负向', note: '政府债务/GDP>120%，长期财政压力制约降息空间' },
+          ],
+          score_formula: `综合得分 = 利率中枢(27.0) + 债务约束(20.8) = ${d2l_score}分（长期定性基准）`,
+        },
+      },
+      // ── 维度3：政策底确认 ────────────────────────────────────────────────
+      {
+        dimension: '政策底确认',
+        a_stock_corr: '正相关',
+        short: {
+          status: scoreToStatus(d3s_score, '宽松', '中性', '紧缩'),
+          score: d3s_score,
+          trend: scoreToTrend(d3s_score),
+          desc: `M2同比=${fmt(v['m2_yoy'],'%')}，CPI同比=${fmt(v['cpi_yoy'],'%')}（CPI接近2%目标=降息空间更大）`,
+          indicators: ['m2_yoy', 'cpi_yoy'],
+          data_quality: 'live',
+          factors: [
+            { name: 'M2货币供应同比', indicator_id: 'm2_yoy', current_value: v['m2_yoy'], unit: '%', weight: 0.50, raw_score: d3s_m2, contribution: +(d3s_m2*0.5).toFixed(1), direction: '正向', note: 'M2增速反映货币宽松程度，>6%为宽松' },
+            { name: 'CPI同比（通胀约束）', indicator_id: 'cpi_yoy', current_value: v['cpi_yoy'], unit: '%', weight: 0.50, raw_score: d3s_cpi, contribution: +(d3s_cpi*0.5).toFixed(1), direction: '负向', note: 'CPI越低越接近2%目标，降息空间越大，对股市越友好' },
+          ],
+          score_formula: `综合得分 = M2同比(${(d3s_m2*0.5).toFixed(1)}) + CPI约束(${(d3s_cpi*0.5).toFixed(1)}) = ${d3s_score}分`,
+        },
+        mid: {
+          status: scoreToStatus(d3m_score, '宽松', '中性', '紧缩'),
+          score: d3m_score,
+          trend: scoreToTrend(d3m_score),
+          desc: `M2同比=${fmt(v['m2_yoy'],'%')}，CPI同比=${fmt(v['cpi_yoy'],'%')}，PPI同比=${fmt(v['ppi_yoy'],'%')}`,
+          indicators: ['m2_yoy', 'cpi_yoy', 'ppi_yoy'],
+          data_quality: 'live',
+          factors: [
+            { name: 'M2货币供应同比', indicator_id: 'm2_yoy', current_value: v['m2_yoy'], unit: '%', weight: 0.40, raw_score: d3m_m2, contribution: +(d3m_m2*0.4).toFixed(1), direction: '正向', note: '中期货币宽松程度' },
+            { name: 'CPI同比', indicator_id: 'cpi_yoy', current_value: v['cpi_yoy'], unit: '%', weight: 0.35, raw_score: d3m_cpi, contribution: +(d3m_cpi*0.35).toFixed(1), direction: '负向', note: '通胀是美联储政策的核心约束' },
+            { name: 'PPI同比', indicator_id: 'ppi_yoy', current_value: v['ppi_yoy'], unit: '%', weight: 0.25, raw_score: d3m_ppi, contribution: +(d3m_ppi*0.25).toFixed(1), direction: '负向', note: 'PPI是CPI的领先指标，PPI下行预示通胀压力缓解' },
+          ],
+          score_formula: `综合得分 = M2(${(d3m_m2*0.4).toFixed(1)}) + CPI(${(d3m_cpi*0.35).toFixed(1)}) + PPI(${(d3m_ppi*0.25).toFixed(1)}) = ${d3m_score}分`,
+        },
+        long: {
+          status: '中性',
+          score: d3l_score,
+          trend: 'flat',
+          desc: '美国财政赤字持续扩大（GDP的5-7%），长期财政刺激空间受限，货币政策独立性面临考验，长期中性偏弱（定性评估，v1基础分45）',
+          indicators: ['m2_yoy', 'cpi_yoy'],
+          data_quality: 'warn',
+          factors: [
+            { name: '财政空间约束', indicator_id: 'm2_yoy', current_value: v['m2_yoy'], unit: '%', weight: 0.50, raw_score: 42, contribution: 21.0, direction: '负向', note: '财政赤字/GDP>5%，长期财政刺激空间受限（定性判断）' },
+            { name: '通胀长期中枢', indicator_id: 'cpi_yoy', current_value: v['cpi_yoy'], unit: '%', weight: 0.50, raw_score: 48, contribution: 24.0, direction: '负向', note: '通胀中枢可能高于2%目标，制约降息幅度（定性判断）' },
+          ],
+          score_formula: `综合得分 = 财政约束(21.0) + 通胀中枢(24.0) = ${d3l_score}分（长期定性基准）`,
+        },
+      },
+      // ── 维度4：流动性环境 ────────────────────────────────────────────────
+      {
+        dimension: '流动性环境',
+        a_stock_corr: '正相关',
+        short: {
+          status: scoreToStatus(d4s_score, '充裕', '中性', '偏紧'),
+          score: d4s_score,
+          trend: scoreToTrend(d4s_score),
+          desc: `全球股市PE(ETF口径)=${fmt(v['equity_pe_etf'],'倍')}，PB=${fmt(v['equity_pb_etf'],'倍')}，M2同比=${fmt(v['m2_yoy'],'%')}`,
+          indicators: ['equity_pe_etf', 'equity_pb_etf', 'm2_yoy'],
+          data_quality: 'live',
+          factors: [
+            { name: '全球股市PE(ETF)', indicator_id: 'equity_pe_etf', current_value: v['equity_pe_etf'], unit: '倍', weight: 0.35, raw_score: d4s_pe, contribution: +(d4s_pe*0.35).toFixed(1), direction: '负向', note: 'PE越低估值越便宜，流动性越充裕；>25倍偏贵，<18倍合理' },
+            { name: '全球股市PB(ETF)', indicator_id: 'equity_pb_etf', current_value: v['equity_pb_etf'], unit: '倍', weight: 0.30, raw_score: d4s_pb, contribution: +(d4s_pb*0.3).toFixed(1), direction: '负向', note: 'PB反映市场整体估值水位' },
+            { name: 'M2货币供应同比', indicator_id: 'm2_yoy', current_value: v['m2_yoy'], unit: '%', weight: 0.35, raw_score: d4s_m2, contribution: +(d4s_m2*0.35).toFixed(1), direction: '正向', note: 'M2增速反映货币供应充裕程度' },
+          ],
+          score_formula: `综合得分 = 市场PE(${(d4s_pe*0.35).toFixed(1)}) + 市场PB(${(d4s_pb*0.3).toFixed(1)}) + M2(${(d4s_m2*0.35).toFixed(1)}) = ${d4s_score}分`,
+        },
+        mid: {
+          status: scoreToStatus(d4m_score, '充裕', '中性', '偏紧'),
+          score: d4m_score,
+          trend: scoreToTrend(d4m_score),
+          desc: `M2同比=${fmt(v['m2_yoy'],'%')}，全球股市PE=${fmt(v['equity_pe_etf'],'倍')}`,
+          indicators: ['m2_yoy', 'equity_pe_etf'],
+          data_quality: 'live',
+          factors: [
+            { name: 'M2货币供应同比', indicator_id: 'm2_yoy', current_value: v['m2_yoy'], unit: '%', weight: 0.50, raw_score: d4m_m2, contribution: +(d4m_m2*0.5).toFixed(1), direction: '正向', note: '中期货币供应趋势' },
+            { name: '全球股市PE(ETF)', indicator_id: 'equity_pe_etf', current_value: v['equity_pe_etf'], unit: '倍', weight: 0.50, raw_score: d4m_pe, contribution: +(d4m_pe*0.5).toFixed(1), direction: '负向', note: '中期估值水位' },
+          ],
+          score_formula: `综合得分 = M2(${(d4m_m2*0.5).toFixed(1)}) + 市场PE(${(d4m_pe*0.5).toFixed(1)}) = ${d4m_score}分`,
+        },
+        long: {
+          status: '偏多',
+          score: d4l_score,
+          trend: 'up',
+          desc: '美元作为全球储备货币，美国资本市场长期吸引全球资金流入，叠加科技创新驱动，长期流动性偏多（定性评估，v1基础分55）',
+          indicators: ['m2_yoy', 'equity_pe_etf'],
+          data_quality: 'warn',
+          factors: [
+            { name: '美元储备货币优势', indicator_id: 'm2_yoy', current_value: v['m2_yoy'], unit: '%', weight: 0.60, raw_score: 60, contribution: 36.0, direction: '正向', note: '美元霸权带来长期资本流入优势（定性判断）' },
+            { name: '科技创新溢价', indicator_id: 'equity_pe_etf', current_value: v['equity_pe_etf'], unit: '倍', weight: 0.40, raw_score: 47, contribution: 18.8, direction: '正向', note: '美国科技股长期享有创新溢价（定性判断）' },
+          ],
+          score_formula: `综合得分 = 美元优势(36.0) + 科技溢价(18.8) = ${d4l_score}分（长期定性基准）`,
+        },
+      },
+      // ── 维度5：外部环境 ──────────────────────────────────────────────────
+      {
+        dimension: '外部环境',
+        a_stock_corr: '弱相关',
+        short: {
+          status: scoreToStatus(d5s_score, '有利', '中性', '不利'),
+          score: d5s_score,
+          trend: scoreToTrend(d5s_score),
+          desc: `贸易差额=${fmt(v['trade_balance'],'百万美元')}，出口同比=${fmt(v['export_yoy'],'%')}，进口同比=${fmt(v['import_yoy'],'%')}`,
+          indicators: ['trade_balance', 'export_yoy', 'import_yoy'],
+          data_quality: 'live',
+          factors: [
+            { name: '贸易差额', indicator_id: 'trade_balance', current_value: v['trade_balance'], unit: '百万美元', weight: 0.30, raw_score: d5s_trade, contribution: +(d5s_trade*0.3).toFixed(1), direction: '正向', note: '美国长期贸易逆差，越接近0越好；当前约-700亿美元/月' },
+            { name: '出口同比', indicator_id: 'export_yoy', current_value: v['export_yoy'], unit: '%', weight: 0.35, raw_score: d5s_export, contribution: +(d5s_export*0.35).toFixed(1), direction: '正向', note: '出口增长反映全球需求对美国产品的认可' },
+            { name: '进口同比', indicator_id: 'import_yoy', current_value: v['import_yoy'], unit: '%', weight: 0.35, raw_score: d5s_import, contribution: +(d5s_import*0.35).toFixed(1), direction: '正向', note: '进口增长反映美国内需强劲，对经济是正面信号' },
+          ],
+          score_formula: `综合得分 = 贸易差额(${(d5s_trade*0.3).toFixed(1)}) + 出口(${(d5s_export*0.35).toFixed(1)}) + 进口(${(d5s_import*0.35).toFixed(1)}) = ${d5s_score}分`,
+        },
+        mid: {
+          status: scoreToStatus(d5m_score, '有利', '中性', '不利'),
+          score: d5m_score,
+          trend: scoreToTrend(d5m_score),
+          desc: `贸易差额=${fmt(v['trade_balance'],'百万美元')}，出口同比=${fmt(v['export_yoy'],'%')}`,
+          indicators: ['trade_balance', 'export_yoy'],
+          data_quality: 'live',
+          factors: [
+            { name: '贸易差额', indicator_id: 'trade_balance', current_value: v['trade_balance'], unit: '百万美元', weight: 0.40, raw_score: d5m_trade, contribution: +(d5m_trade*0.4).toFixed(1), direction: '正向', note: '中期贸易格局' },
+            { name: '出口同比', indicator_id: 'export_yoy', current_value: v['export_yoy'], unit: '%', weight: 0.60, raw_score: d5m_export, contribution: +(d5m_export*0.6).toFixed(1), direction: '正向', note: '中期出口趋势' },
+          ],
+          score_formula: `综合得分 = 贸易差额(${(d5m_trade*0.4).toFixed(1)}) + 出口(${(d5m_export*0.6).toFixed(1)}) = ${d5m_score}分`,
+        },
+        long: {
+          status: '偏多',
+          score: d5l_score,
+          trend: 'up',
+          desc: '美国长期维持全球最大经济体地位，美元储备货币地位保障外部环境长期有利，长期偏多（定性评估，v1基础分58）',
+          indicators: ['trade_balance', 'export_yoy'],
+          data_quality: 'warn',
+          factors: [
+            { name: '美元储备货币地位', indicator_id: 'trade_balance', current_value: v['trade_balance'], unit: '百万美元', weight: 0.55, raw_score: 62, contribution: 34.1, direction: '正向', note: '美元占全球储备约60%，长期资本流入优势（定性判断）' },
+            { name: '全球经济影响力', indicator_id: 'export_yoy', current_value: v['export_yoy'], unit: '%', weight: 0.45, raw_score: 52, contribution: 23.4, direction: '正向', note: '美国科技/金融/军工等领域的全球主导地位（定性判断）' },
+          ],
+          score_formula: `综合得分 = 美元地位(34.1) + 全球影响力(23.4) = ${d5l_score}分（长期定性基准）`,
         },
       },
     ],
