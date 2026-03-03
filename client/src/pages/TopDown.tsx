@@ -196,6 +196,44 @@ function CellExpandPanel({ cell, dimension, period }: {
               <div className="text-[10px] text-gray-600 font-mono leading-relaxed">{cell.score_formula}</div>
             </div>
           )}
+          {/* 分数段说明 */}
+          <div className="bg-white/70 rounded-lg px-2.5 py-2 border border-white/60">
+            <div className="text-[9px] text-gray-400 font-medium uppercase tracking-wide mb-1.5">分数段说明（满分100）</div>
+            <div className="flex gap-1 flex-wrap">
+              {[
+                { range: '85–100', label: '极强', color: '#dc2626' },
+                { range: '70–84', label: '偏强', color: '#ea580c' },
+                { range: '55–69', label: '中性偏强', color: '#d97706' },
+                { range: '45–54', label: '中性', color: '#6b7280' },
+                { range: '30–44', label: '中性偏弱', color: '#0284c7' },
+                { range: '15–29', label: '偏弱', color: '#2563eb' },
+                { range: '0–14', label: '极弱', color: '#1d4ed8' },
+              ].map(band => {
+                const score = cell.score;
+                const [lo, hi] = band.range.split('–').map(Number);
+                const isActive = score >= lo && score <= hi;
+                return (
+                  <div
+                    key={band.range}
+                    className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium border transition-all ${
+                      isActive ? 'ring-1 ring-offset-0' : 'opacity-50'
+                    }`}
+                    style={{
+                      backgroundColor: isActive ? band.color + '22' : '#f3f4f6',
+                      borderColor: isActive ? band.color : '#e5e7eb',
+                      color: isActive ? band.color : '#9ca3af',
+                      ringColor: isActive ? band.color : 'transparent',
+                    }}
+                  >
+                    {isActive && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: band.color }} />}
+                    <span>{band.range}</span>
+                    <span className="font-bold">{band.label}</span>
+                    {isActive && <span className="ml-0.5 font-bold">← {score}分</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           <div className="bg-white/70 rounded-lg overflow-hidden border border-white/60">
             <table className="w-full text-[10px]">
               <thead>
