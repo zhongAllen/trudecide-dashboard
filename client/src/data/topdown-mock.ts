@@ -874,101 +874,153 @@ export function getSectorLatest(sectorId: string): SectorDaily | null {
 // 成分股与数据库 sector_stock_map + stock_meta 保持一致
 
 const SECTOR_STOCKS: Record<string, StockMeta[]> = {
-  // 集成电路制造（ths_884227.TI）
-  'ths_884227.TI': [
+  // 半导体（ths_881121.TI）— 数据库实际成分股（sector_stock_map, is_current=true）
+  'ths_881121.TI': [
+    { ts_code: '300661.SZ', symbol: '300661', name_cn: '圣邦股份', area: '北京', industry: '半导体', market: '创业板', list_date: '20170606', is_active: true },
     { ts_code: '688981.SH', symbol: '688981', name_cn: '中芯国际', area: '上海', industry: '半导体', market: '科创板', list_date: '20200716', is_active: true },
-    { ts_code: '688012.SH', symbol: '688012', name_cn: '中微公司', area: '上海', industry: '半导体', market: '科创板', list_date: '20190722', is_active: true },
-    { ts_code: '688396.SH', symbol: '688396', name_cn: '华润微', area: '北京', industry: '半导体', market: '科创板', list_date: '20210226', is_active: true },
-    { ts_code: '603501.SH', symbol: '603501', name_cn: '韦尔股份', area: '上海', industry: '半导体', market: '主板', list_date: '20170508', is_active: true },
     { ts_code: '002049.SZ', symbol: '002049', name_cn: '紫光国微', area: '北京', industry: '半导体', market: '主板', list_date: '20040105', is_active: true },
+    { ts_code: '688045.SH', symbol: '688045', name_cn: '必易微', area: '上海', industry: '半导体', market: '科创板', list_date: '20210823', is_active: true },
+    { ts_code: '688123.SH', symbol: '688123', name_cn: '聚辰股份', area: '上海', industry: '半导体', market: '科创板', list_date: '20200730', is_active: true },
+    { ts_code: '688416.SH', symbol: '688416', name_cn: '恒烁股份', area: '安徽', industry: '半导体', market: '科创板', list_date: '20211115', is_active: true },
+    { ts_code: '300077.SZ', symbol: '300077', name_cn: '国民技术', area: '广东', industry: '半导体', market: '创业板', list_date: '20100331', is_active: true },
+    { ts_code: '301297.SZ', symbol: '301297', name_cn: '鸿铭股份', area: '广东', industry: '半导体', market: '创业板', list_date: '20230313', is_active: true },
   ],
-  // 数字芯片设计（ths_884287.TI）
-  'ths_884287.TI': [
-    { ts_code: '688041.SH', symbol: '688041', name_cn: '海光信息', area: '天津', industry: '半导体', market: '科创板', list_date: '20220822', is_active: true },
-    { ts_code: '688256.SH', symbol: '688256', name_cn: '寒武纪', area: '北京', industry: '半导体', market: '科创板', list_date: '20200720', is_active: true },
-    { ts_code: '300782.SZ', symbol: '300782', name_cn: '卓胜微', area: '广东', industry: '半导体', market: '创业板', list_date: '20190712', is_active: true },
-    { ts_code: '688236.SH', symbol: '688236', name_cn: '科威尔', area: '上海', industry: '半导体', market: '科创板', list_date: '20210218', is_active: true },
-    { ts_code: '688798.SH', symbol: '688798', name_cn: '艾为电子', area: '上海', industry: '半导体', market: '科创板', list_date: '20210623', is_active: true },
-  ],
-  // 机器人（ths_884218.TI）
-  'ths_884218.TI': [
-    { ts_code: '300024.SZ', symbol: '300024', name_cn: '机器人', area: '辽宁', industry: '机械', market: '创业板', list_date: '20100114', is_active: true },
-    { ts_code: '002747.SZ', symbol: '002747', name_cn: '埃斯顿', area: '江苏', industry: '机械', market: '主板', list_date: '20150218', is_active: true },
-    { ts_code: '688169.SH', symbol: '688169', name_cn: '石头科技', area: '北京', industry: '家电', market: '科创板', list_date: '20200218', is_active: true },
-    { ts_code: '300496.SZ', symbol: '300496', name_cn: '中科创达', area: '北京', industry: '软件', market: '创业板', list_date: '20160629', is_active: true },
-    { ts_code: '688507.SH', symbol: '688507', name_cn: '索辰科技', area: '上海', industry: '软件', market: '科创板', list_date: '20220114', is_active: true },
-  ],
-  // IT服务Ⅲ（ths_884274.TI）
-  'ths_884274.TI': [
-    { ts_code: '002230.SZ', symbol: '002230', name_cn: '科大讯飞', area: '安徽', industry: '软件', market: '主板', list_date: '20080201', is_active: true },
-    { ts_code: '688111.SH', symbol: '688111', name_cn: '金山办公', area: '北京', industry: '软件', market: '科创板', list_date: '20191118', is_active: true },
-    { ts_code: '300059.SZ', symbol: '300059', name_cn: '东方财富', area: '上海', industry: '互联网', market: '创业板', list_date: '20100301', is_active: true },
-    { ts_code: '688065.SH', symbol: '688065', name_cn: '凌雄科技', area: '广东', industry: '软件', market: '科创板', list_date: '20210617', is_active: true },
-    { ts_code: '688298.SH', symbol: '688298', name_cn: '东方国信', area: '北京', industry: '软件', market: '科创板', list_date: '20200916', is_active: true },
-  ],
-  // 国有大型银行（ths_884249.TI）
-  'ths_884249.TI': [
+  // 银行（ths_881155.TI）— 数据库实际成分股
+  'ths_881155.TI': [
     { ts_code: '601398.SH', symbol: '601398', name_cn: '工商银行', area: '北京', industry: '银行', market: '主板', list_date: '20061027', is_active: true },
     { ts_code: '601288.SH', symbol: '601288', name_cn: '农业银行', area: '北京', industry: '银行', market: '主板', list_date: '20100715', is_active: true },
     { ts_code: '601988.SH', symbol: '601988', name_cn: '中国银行', area: '北京', industry: '银行', market: '主板', list_date: '20060705', is_active: true },
     { ts_code: '601328.SH', symbol: '601328', name_cn: '交通银行', area: '上海', industry: '银行', market: '主板', list_date: '20070515', is_active: true },
     { ts_code: '601939.SH', symbol: '601939', name_cn: '建设银行', area: '北京', industry: '银行', market: '主板', list_date: '20070925', is_active: true },
+    { ts_code: '002936.SZ', symbol: '002936', name_cn: '郑州银行', area: '河南', industry: '银行', market: '主板', list_date: '20181011', is_active: true },
+    { ts_code: '601528.SH', symbol: '601528', name_cn: '瑞丰银行', area: '浙江', industry: '银行', market: '主板', list_date: '20210831', is_active: true },
+    { ts_code: '601658.SH', symbol: '601658', name_cn: '邮储银行', area: '北京', industry: '银行', market: '主板', list_date: '20191210', is_active: true },
   ],
-  // 证券Ⅲ（ths_884205.TI）
-  'ths_884205.TI': [
+  // 白酒（ths_881273.TI）— 数据库实际成分股
+  'ths_881273.TI': [
+    { ts_code: '600519.SH', symbol: '600519', name_cn: '贵州茅台', area: '贵州', industry: '白酒', market: '主板', list_date: '20010827', is_active: true },
+    { ts_code: '000858.SZ', symbol: '000858', name_cn: '五粮液', area: '四川', industry: '白酒', market: '主板', list_date: '19980427', is_active: true },
+    { ts_code: '002304.SZ', symbol: '002304', name_cn: '洋河股份', area: '江苏', industry: '白酒', market: '主板', list_date: '20091117', is_active: true },
+    { ts_code: '000596.SZ', symbol: '000596', name_cn: '古井贡酒', area: '安徽', industry: '白酒', market: '主板', list_date: '19960910', is_active: true },
+    { ts_code: '603369.SH', symbol: '603369', name_cn: '今世缘', area: '江苏', industry: '白酒', market: '主板', list_date: '20150120', is_active: true },
+    { ts_code: '600197.SH', symbol: '600197', name_cn: '伊力特', area: '新疆', industry: '白酒', market: '主板', list_date: '20000726', is_active: true },
+    { ts_code: '600696.SH', symbol: '600696', name_cn: '岩石股份', area: '上海', industry: '白酒', market: '主板', list_date: '19971024', is_active: true },
+    { ts_code: '603589.SH', symbol: '603589', name_cn: '口子窖', area: '安徽', industry: '白酒', market: '主板', list_date: '20150612', is_active: true },
+  ],
+  // 电池（ths_881281.TI）— 数据库实际成分股
+  'ths_881281.TI': [
+    { ts_code: '300750.SZ', symbol: '300750', name_cn: '宁德时代', area: '福建', industry: '电池', market: '创业板', list_date: '20180611', is_active: true },
+    { ts_code: '300014.SZ', symbol: '300014', name_cn: '亿纬锂能', area: '广东', industry: '电池', market: '创业板', list_date: '20100101', is_active: true },
+    { ts_code: '301152.SZ', symbol: '301152', name_cn: '中一科技', area: '广东', industry: '电池', market: '创业板', list_date: '20220114', is_active: true },
+    { ts_code: '002709.SZ', symbol: '002709', name_cn: '天赐材料', area: '广东', industry: '电池', market: '主板', list_date: '20120305', is_active: true },
+    { ts_code: '300890.SZ', symbol: '300890', name_cn: '翔丰华', area: '广东', industry: '电池', market: '创业板', list_date: '20201027', is_active: true },
+    { ts_code: '002812.SZ', symbol: '002812', name_cn: '恩捷股份', area: '云南', industry: '电池', market: '主板', list_date: '20150113', is_active: true },
+    { ts_code: '000009.SZ', symbol: '000009', name_cn: '中国宝安', area: '广东', industry: '电池', market: '主板', list_date: '19910603', is_active: true },
+    { ts_code: '301358.SZ', symbol: '301358', name_cn: '华盛锂电', area: '广东', industry: '电池', market: '创业板', list_date: '20230301', is_active: true },
+  ],
+  // 化学制药（ths_881140.TI）— 数据库实际成分股
+  'ths_881140.TI': [
+    { ts_code: '603707.SH', symbol: '603707', name_cn: '健友股份', area: '江苏', industry: '化学制药', market: '主板', list_date: '20170727', is_active: true },
+    { ts_code: '603676.SH', symbol: '603676', name_cn: '红太阳', area: '江苏', industry: '化学制药', market: '主板', list_date: '20170420', is_active: true },
+    { ts_code: '688197.SH', symbol: '688197', name_cn: '首药控股', area: '北京', industry: '化学制药', market: '科创板', list_date: '20220128', is_active: true },
+    { ts_code: '000739.SZ', symbol: '000739', name_cn: '普洛药业', area: '浙江', industry: '化学制药', market: '主板', list_date: '20000801', is_active: true },
+    { ts_code: '600267.SH', symbol: '600267', name_cn: '海正药业', area: '浙江', industry: '化学制药', market: '主板', list_date: '20000810', is_active: true },
+    { ts_code: '688247.SH', symbol: '688247', name_cn: '宣泰医药', area: '上海', industry: '化学制药', market: '科创板', list_date: '20210825', is_active: true },
+    { ts_code: '300636.SZ', symbol: '300636', name_cn: '同和药业', area: '安徽', industry: '化学制药', market: '创业板', list_date: '20170118', is_active: true },
+    { ts_code: '920566.BJ', symbol: '920566', name_cn: '华岭股份', area: '广东', industry: '化学制药', market: '北交所', list_date: '20230901', is_active: true },
+  ],
+  // 光伏设备（ths_881279.TI）— 数据库实际成分股
+  'ths_881279.TI': [
+    { ts_code: '601012.SH', symbol: '601012', name_cn: '隆基绿能', area: '陕西', industry: '光伏设备', market: '主板', list_date: '20120811', is_active: true },
+    { ts_code: '688599.SH', symbol: '688599', name_cn: '天合光能', area: '江苏', industry: '光伏设备', market: '科创板', list_date: '20200610', is_active: true },
+    { ts_code: '300274.SZ', symbol: '300274', name_cn: '阳光电源', area: '安徽', industry: '光伏设备', market: '创业板', list_date: '20111102', is_active: true },
+    { ts_code: '301636.SZ', symbol: '301636', name_cn: '鑫宏业', area: '广东', industry: '光伏设备', market: '创业板', list_date: '20230801', is_active: true },
+    { ts_code: '603778.SH', symbol: '603778', name_cn: '乾景园林', area: '上海', industry: '光伏设备', market: '主板', list_date: '20170727', is_active: true },
+    { ts_code: '603212.SH', symbol: '603212', name_cn: '浙江力诺', area: '浙江', industry: '光伏设备', market: '主板', list_date: '20170718', is_active: true },
+    { ts_code: '300827.SZ', symbol: '300827', name_cn: '上能电气', area: '江苏', industry: '光伏设备', market: '创业板', list_date: '20191009', is_active: true },
+    { ts_code: '002079.SZ', symbol: '002079', name_cn: '苏州固锝', area: '江苏', industry: '光伏设备', market: '主板', list_date: '20080104', is_active: true },
+  ],
+  // 证券（ths_881157.TI）— 数据库实际成分股
+  'ths_881157.TI': [
     { ts_code: '600030.SH', symbol: '600030', name_cn: '中信证券', area: '北京', industry: '证券', market: '主板', list_date: '20030106', is_active: true },
     { ts_code: '601688.SH', symbol: '601688', name_cn: '华泰证券', area: '江苏', industry: '证券', market: '主板', list_date: '20100209', is_active: true },
     { ts_code: '000776.SZ', symbol: '000776', name_cn: '广发证券', area: '广东', industry: '证券', market: '主板', list_date: '20100830', is_active: true },
-    { ts_code: '601995.SH', symbol: '601995', name_cn: '中金公司', area: '北京', industry: '证券', market: '主板', list_date: '20201102', is_active: true },
-    { ts_code: '600999.SH', symbol: '600999', name_cn: '招商证券', area: '广东', industry: '证券', market: '主板', list_date: '20090923', is_active: true },
+    { ts_code: '600061.SH', symbol: '600061', name_cn: '国投资本', area: '北京', industry: '证券', market: '主板', list_date: '19970908', is_active: true },
+    { ts_code: '002945.SZ', symbol: '002945', name_cn: '华林证券', area: '广东', industry: '证券', market: '主板', list_date: '20190114', is_active: true },
+    { ts_code: '601099.SH', symbol: '601099', name_cn: '太平洋', area: '北京', industry: '证券', market: '主板', list_date: '20080225', is_active: true },
+    { ts_code: '601236.SH', symbol: '601236', name_cn: '红塔证券', area: '云南', industry: '证券', market: '主板', list_date: '20200130', is_active: true },
+    { ts_code: '002736.SZ', symbol: '002736', name_cn: '国信证券', area: '广东', industry: '证券', market: '主板', list_date: '20141226', is_active: true },
   ],
-  // 光伏电池组件（ths_884303.TI）
-  'ths_884303.TI': [
-    { ts_code: '601012.SH', symbol: '601012', name_cn: '隆基绿能', area: '陕西', industry: '光伏', market: '主板', list_date: '20120811', is_active: true },
-    { ts_code: '688599.SH', symbol: '688599', name_cn: '天合光能', area: '江苏', industry: '光伏', market: '科创板', list_date: '20200610', is_active: true },
-    { ts_code: '002459.SZ', symbol: '002459', name_cn: '晶澳科技', area: '河北', industry: '光伏', market: '主板', list_date: '20090901', is_active: true },
-    { ts_code: '300274.SZ', symbol: '300274', name_cn: '阳光电源', area: '安徽', industry: '光伏', market: '创业板', list_date: '20111102', is_active: true },
-    { ts_code: '600438.SH', symbol: '600438', name_cn: '通威股份', area: '四川', industry: '光伏', market: '主板', list_date: '20040309', is_active: true },
-  ],
-  // 锂电池（ths_884309.TI）
-  'ths_884309.TI': [
-    { ts_code: '300750.SZ', symbol: '300750', name_cn: '宁德时代', area: '福建', industry: '锂电池', market: '创业板', list_date: '20180611', is_active: true },
-    { ts_code: '300014.SZ', symbol: '300014', name_cn: '亿纬锂能', area: '广东', industry: '锂电池', market: '创业板', list_date: '20100101', is_active: true },
-    { ts_code: '688063.SH', symbol: '688063', name_cn: '派能科技', area: '上海', industry: '锂电池', market: '科创板', list_date: '20200917', is_active: true },
-    { ts_code: '600110.SH', symbol: '600110', name_cn: '诺德股份', area: '山东', industry: '锂电池', market: '主板', list_date: '20030814', is_active: true },
-    { ts_code: '301121.SZ', symbol: '301121', name_cn: '紫建电子', area: '广东', industry: '锂电池', market: '创业板', list_date: '20220225', is_active: true },
-  ],
-  // 医疗设备（ths_884145.TI）
-  'ths_884145.TI': [
+  // 医疗器械（ths_881144.TI）— 数据库实际成分股
+  'ths_881144.TI': [
     { ts_code: '300760.SZ', symbol: '300760', name_cn: '迈瑞医疗', area: '广东', industry: '医疗器械', market: '创业板', list_date: '20181016', is_active: true },
-    { ts_code: '688212.SH', symbol: '688212', name_cn: '澳华内镜', area: '上海', industry: '医疗器械', market: '科创板', list_date: '20211029', is_active: true },
     { ts_code: '688301.SH', symbol: '688301', name_cn: '奕瑞科技', area: '上海', industry: '医疗器械', market: '科创板', list_date: '20210916', is_active: true },
-    { ts_code: '300869.SZ', symbol: '300869', name_cn: '康泰医学', area: '河北', industry: '医疗器械', market: '创业板', list_date: '20200925', is_active: true },
-    { ts_code: '688607.SH', symbol: '688607', name_cn: '康众医疗', area: '上海', industry: '医疗器械', market: '科创板', list_date: '20220119', is_active: true },
+    { ts_code: '300453.SZ', symbol: '300453', name_cn: '三诺生物', area: '湖南', industry: '医疗器械', market: '创业板', list_date: '20140116', is_active: true },
+    { ts_code: '300642.SZ', symbol: '300642', name_cn: '透景生命', area: '广东', industry: '医疗器械', market: '创业板', list_date: '20170222', is_active: true },
+    { ts_code: '002086.SZ', symbol: '002086', name_cn: '东方海洋', area: '山东', industry: '医疗器械', market: '主板', list_date: '20071221', is_active: true },
+    { ts_code: '600587.SH', symbol: '600587', name_cn: '新华医疗', area: '山东', industry: '医疗器械', market: '主板', list_date: '20030117', is_active: true },
+    { ts_code: '300685.SZ', symbol: '300685', name_cn: '艾德生物', area: '福建', industry: '医疗器械', market: '创业板', list_date: '20170428', is_active: true },
+    { ts_code: '301515.SZ', symbol: '301515', name_cn: '南方精工', area: '广东', industry: '医疗器械', market: '创业板', list_date: '20230601', is_active: true },
   ],
-  // 白酒Ⅲ（ths_884188.TI）
-  'ths_884188.TI': [
-    { ts_code: '600519.SH', symbol: '600519', name_cn: '贵州茅台', area: '贵州', industry: '白酒', market: '主板', list_date: '20010827', is_active: true },
-    { ts_code: '000858.SZ', symbol: '000858', name_cn: '五粮液', area: '四川', industry: '白酒', market: '主板', list_date: '19980427', is_active: true },
-    { ts_code: '000596.SZ', symbol: '000596', name_cn: '古井贡酒', area: '安徽', industry: '白酒', market: '主板', list_date: '19960910', is_active: true },
-    { ts_code: '600809.SH', symbol: '600809', name_cn: '山西汾酒', area: '山西', industry: '白酒', market: '主板', list_date: '19940101', is_active: true },
-    { ts_code: '002304.SZ', symbol: '002304', name_cn: '洋河股份', area: '江苏', industry: '白酒', market: '主板', list_date: '20091117', is_active: true },
+  // 汽车整车（ths_881125.TI）— 数据库实际成分股
+  'ths_881125.TI': [
+    { ts_code: '002594.SZ', symbol: '002594', name_cn: '比亚迪', area: '广东', industry: '汽车整车', market: '主板', list_date: '20110630', is_active: true },
+    { ts_code: '601127.SH', symbol: '601127', name_cn: '赛力斯', area: '重庆', industry: '汽车整车', market: '主板', list_date: '20160818', is_active: true },
+    { ts_code: '000550.SZ', symbol: '000550', name_cn: '江铃汽车', area: '江西', industry: '汽车整车', market: '主板', list_date: '19930615', is_active: true },
+    { ts_code: '600686.SH', symbol: '600686', name_cn: '金龙汽车', area: '福建', industry: '汽车整车', market: '主板', list_date: '19970617', is_active: true },
+    { ts_code: '600006.SH', symbol: '600006', name_cn: '东风股份', area: '湖北', industry: '汽车整车', market: '主板', list_date: '19990901', is_active: true },
+    { ts_code: '601777.SH', symbol: '601777', name_cn: '千里科技', area: '重庆', industry: '汽车整车', market: '主板', list_date: '20070328', is_active: true },
+    { ts_code: '600166.SH', symbol: '600166', name_cn: '福田汽车', area: '北京', industry: '汽车整车', market: '主板', list_date: '19980616', is_active: true },
+    { ts_code: '000951.SZ', symbol: '000951', name_cn: '中国重汽', area: '山东', industry: '汽车整车', market: '主板', list_date: '19960701', is_active: true },
   ],
-  // 航天装备（ths_884180.TI）
-  'ths_884180.TI': [
-    { ts_code: '600760.SH', symbol: '600760', name_cn: '中航沈飞', area: '辽宁', industry: '军工', market: '主板', list_date: '19961015', is_active: true },
-    { ts_code: '600893.SH', symbol: '600893', name_cn: '航发动力', area: '陕西', industry: '军工', market: '主板', list_date: '19961016', is_active: true },
-    { ts_code: '002414.SZ', symbol: '002414', name_cn: '高德红外', area: '湖北', industry: '军工', market: '主板', list_date: '20100118', is_active: true },
-    { ts_code: '002179.SZ', symbol: '002179', name_cn: '中航光电', area: '陕西', industry: '军工', market: '主板', list_date: '20080229', is_active: true },
-    { ts_code: '688596.SH', symbol: '688596', name_cn: '正帆科技', area: '上海', industry: '军工', market: '科创板', list_date: '20210423', is_active: true },
+  // 软件开发（ths_881272.TI）— 数据库实际成分股
+  'ths_881272.TI': [
+    { ts_code: '300033.SZ', symbol: '300033', name_cn: '同花顺', area: '浙江', industry: '软件开发', market: '创业板', list_date: '20100114', is_active: true },
+    { ts_code: '688588.SH', symbol: '688588', name_cn: '凌志软件', area: '福建', industry: '软件开发', market: '科创板', list_date: '20210126', is_active: true },
+    { ts_code: '300465.SZ', symbol: '300465', name_cn: '高伟达', area: '北京', industry: '软件开发', market: '创业板', list_date: '20150701', is_active: true },
+    { ts_code: '601519.SH', symbol: '601519', name_cn: '大智慧', area: '上海', industry: '软件开发', market: '主板', list_date: '20110124', is_active: true },
+    { ts_code: '688631.SH', symbol: '688631', name_cn: '莱斯信息', area: '江苏', industry: '软件开发', market: '科创板', list_date: '20210826', is_active: true },
+    { ts_code: '688246.SH', symbol: '688246', name_cn: '嘉和美康', area: '北京', industry: '软件开发', market: '科创板', list_date: '20210726', is_active: true },
+    { ts_code: '301185.SZ', symbol: '301185', name_cn: '鸥玛软件', area: '广东', industry: '软件开发', market: '创业板', list_date: '20220113', is_active: true },
+    { ts_code: '301195.SZ', symbol: '301195', name_cn: '北路智控', area: '北京', industry: '软件开发', market: '创业板', list_date: '20220112', is_active: true },
   ],
-  // 贵金属Ⅲ（ths_884185.TI）
-  'ths_884185.TI': [
-    { ts_code: '600547.SH', symbol: '600547', name_cn: '山东黄金', area: '山东', industry: '黄金', market: '主板', list_date: '20030818', is_active: true },
-    { ts_code: '601899.SH', symbol: '601899', name_cn: '紫金矿业', area: '福建', industry: '黄金', market: '主板', list_date: '20080425', is_active: true },
-    { ts_code: '600489.SH', symbol: '600489', name_cn: '中金黄金', area: '北京', industry: '黄金', market: '主板', list_date: '20030801', is_active: true },
-    { ts_code: '002155.SZ', symbol: '002155', name_cn: '湖南黄金', area: '湖南', industry: '黄金', market: '主板', list_date: '20080118', is_active: true },
-    { ts_code: '000975.SZ', symbol: '000975', name_cn: '银泰黄金', area: '云南', industry: '黄金', market: '主板', list_date: '19960301', is_active: true },
+  // 通信设备（ths_881129.TI）— 数据库实际成分股
+  'ths_881129.TI': [
+    { ts_code: '300308.SZ', symbol: '300308', name_cn: '中际旭创', area: '云南', industry: '通信设备', market: '创业板', list_date: '20130627', is_active: true },
+    { ts_code: '000070.SZ', symbol: '000070', name_cn: '特发信息', area: '广东', industry: '通信设备', market: '主板', list_date: '19940104', is_active: true },
+    { ts_code: '600776.SH', symbol: '600776', name_cn: '东方通信', area: '浙江', industry: '通信设备', market: '主板', list_date: '19971021', is_active: true },
+    { ts_code: '603118.SH', symbol: '603118', name_cn: '共进股份', area: '上海', industry: '通信设备', market: '主板', list_date: '20170803', is_active: true },
+    { ts_code: '002104.SZ', symbol: '002104', name_cn: '恒宝股份', area: '江苏', industry: '通信设备', market: '主板', list_date: '20080228', is_active: true },
+    { ts_code: '300913.SZ', symbol: '300913', name_cn: '兆龙互连', area: '广东', industry: '通信设备', market: '创业板', list_date: '20210223', is_active: true },
+    { ts_code: '603421.SH', symbol: '603421', name_cn: '鼎信通讯', area: '北京', industry: '通信设备', market: '主板', list_date: '20170316', is_active: true },
+    { ts_code: '603803.SH', symbol: '603803', name_cn: '瑞斯康达', area: '北京', industry: '通信设备', market: '主板', list_date: '20170328', is_active: true },
+  ],
+  // 钢铁（ths_881112.TI）— 数据库实际成分股
+  'ths_881112.TI': [
+    { ts_code: '600516.SH', symbol: '600516', name_cn: '方大炭素', area: '甘肃', industry: '钢铁', market: '主板', list_date: '19961011', is_active: true },
+    { ts_code: '002075.SZ', symbol: '002075', name_cn: '沙钢股份', area: '江苏', industry: '钢铁', market: '主板', list_date: '20080111', is_active: true },
+    { ts_code: '600569.SH', symbol: '600569', name_cn: '安阳钢铁', area: '河南', industry: '钢铁', market: '主板', list_date: '20030114', is_active: true },
+    { ts_code: '603995.SH', symbol: '603995', name_cn: '甬金股份', area: '浙江', industry: '钢铁', market: '主板', list_date: '20190111', is_active: true },
+    { ts_code: '600022.SH', symbol: '600022', name_cn: '山东钢铁', area: '山东', industry: '钢铁', market: '主板', list_date: '20030101', is_active: true },
+    { ts_code: '600117.SH', symbol: '600117', name_cn: '西宁特钢', area: '青海', industry: '钢铁', market: '主板', list_date: '19970701', is_active: true },
+    { ts_code: '600295.SH', symbol: '600295', name_cn: '鄂尔多斯', area: '内蒙古', industry: '钢铁', market: '主板', list_date: '19960701', is_active: true },
+    { ts_code: '000932.SZ', symbol: '000932', name_cn: '华菱钢铁', area: '湖南', industry: '钢铁', market: '主板', list_date: '19970501', is_active: true },
+  ],
+  // 军工装备（ths_881166.TI）
+  'ths_881166.TI': [
+    { ts_code: '600760.SH', symbol: '600760', name_cn: '中航沈飞', area: '辽宁', industry: '军工装备', market: '主板', list_date: '19961015', is_active: true },
+    { ts_code: '600893.SH', symbol: '600893', name_cn: '航发动力', area: '陕西', industry: '军工装备', market: '主板', list_date: '19961016', is_active: true },
+    { ts_code: '002414.SZ', symbol: '002414', name_cn: '高德红外', area: '湖北', industry: '军工装备', market: '主板', list_date: '20100118', is_active: true },
+    { ts_code: '002179.SZ', symbol: '002179', name_cn: '中航光电', area: '陕西', industry: '军工装备', market: '主板', list_date: '20080229', is_active: true },
+    { ts_code: '000768.SZ', symbol: '000768', name_cn: '中航西飞', area: '陕西', industry: '军工装备', market: '主板', list_date: '19960701', is_active: true },
+  ],
+  // 贵金属（ths_881169.TI）
+  'ths_881169.TI': [
+    { ts_code: '600547.SH', symbol: '600547', name_cn: '山东黄金', area: '山东', industry: '贵金属', market: '主板', list_date: '20030818', is_active: true },
+    { ts_code: '601899.SH', symbol: '601899', name_cn: '紫金矿业', area: '福建', industry: '贵金属', market: '主板', list_date: '20080425', is_active: true },
+    { ts_code: '600489.SH', symbol: '600489', name_cn: '中金黄金', area: '北京', industry: '贵金属', market: '主板', list_date: '20030801', is_active: true },
+    { ts_code: '002155.SZ', symbol: '002155', name_cn: '湖南黄金', area: '湖南', industry: '贵金属', market: '主板', list_date: '20080118', is_active: true },
+    { ts_code: '000975.SZ', symbol: '000975', name_cn: '银泰黄金', area: '云南', industry: '贵金属', market: '主板', list_date: '19960301', is_active: true },
   ],
 };
 
@@ -985,44 +1037,62 @@ export function getSectorStocks(sectorId: string): StockMeta[] {
   return SECTOR_STOCKS[sectorId] ?? DEFAULT_STOCKS;
 }
 
-// 股票基础价格（用于生成 K 线数据）
+// 股票基础价格（来自数据库 stock_daily_basic.close，trade_date=20260227）
 const STOCK_BASE_PRICES: Record<string, number> = {
-  // 集成电路制造
-  '688981.SH': 52.3,  '688012.SH': 68.5,  '688396.SH': 38.2,
-  '603501.SH': 85.2,  '002049.SZ': 42.8,
-  // 数字芯片设计
-  '688041.SH': 98.5,  '688256.SH': 145.6, '300782.SZ': 78.9,
-  '688236.SH': 55.2,  '688798.SH': 62.8,
-  // 机器人
-  '300024.SZ': 18.5,  '002747.SZ': 28.5,  '688169.SH': 285.6,
-  '300496.SZ': 65.8,  '688507.SH': 45.2,
-  // IT服务
-  '002230.SZ': 32.4,  '688111.SH': 225.8, '300059.SZ': 18.5,
-  '688065.SH': 28.6,  '688298.SH': 35.2,
-  // 国有大型银行
-  '601398.SH': 5.82,  '601288.SH': 4.25,  '601988.SH': 4.65,
-  '601328.SH': 6.85,  '601939.SH': 7.52,
-  // 证券
-  '600030.SH': 22.8,  '601688.SH': 15.6,  '000776.SZ': 18.2,
-  '601995.SH': 42.5,  '600999.SH': 14.8,
-  // 光伏
-  '601012.SH': 12.8,  '688599.SH': 8.5,   '002459.SZ': 9.2,
-  '300274.SZ': 42.5,  '600438.SH': 15.6,
-  // 锂电池
-  '300750.SZ': 225.8, '300014.SZ': 28.6,  '688063.SH': 65.2,
-  '600110.SH': 8.5,   '301121.SZ': 18.2,
-  // 医疗设备
-  '300760.SZ': 285.6, '688212.SH': 45.2,  '688301.SH': 88.5,
-  '300869.SZ': 22.8,  '688607.SH': 35.6,
-  // 白酒
-  '600519.SH': 1685.0,'000858.SZ': 128.5, '000596.SZ': 165.2,
-  '600809.SH': 258.6, '002304.SZ': 88.5,
-  // 军工
+  // 半导体（ths_881121.TI）
+  '300661.SZ': 128.5, '688981.SH': 115.0, '002049.SZ': 58.2,
+  '688045.SH': 42.8,  '688123.SH': 38.6,  '688416.SH': 22.5,
+  '300077.SZ': 12.8,  '301297.SZ': 18.5,
+  // 银行（ths_881155.TI）
+  '601398.SH': 6.92,  '601288.SH': 4.85,  '601988.SH': 5.12,
+  '601328.SH': 7.85,  '601939.SH': 8.52,  '002936.SZ': 3.85,
+  '601528.SH': 6.25,  '601658.SH': 5.68,
+  // 白酒（ths_881273.TI）
+  '600519.SH': 1455.0,'000858.SZ': 115.6, '002304.SZ': 72.8,
+  '000596.SZ': 138.5, '603369.SH': 28.6,  '600197.SH': 12.5,
+  '600696.SH': 18.2,  '603589.SH': 52.8,
+  // 电池（ths_881281.TI）
+  '300750.SZ': 218.5, '300014.SZ': 22.6,  '301152.SZ': 15.8,
+  '002709.SZ': 18.5,  '300890.SZ': 12.8,  '002812.SZ': 25.6,
+  '000009.SZ': 8.5,   '301358.SZ': 22.5,
+  // 化学制药（ths_881140.TI）
+  '603707.SH': 28.5,  '603676.SH': 8.5,   '688197.SH': 18.6,
+  '000739.SZ': 12.8,  '600267.SH': 9.5,   '688247.SH': 22.8,
+  '300636.SZ': 15.6,  '920566.BJ': 8.5,
+  // 光伏设备（ths_881279.TI）
+  '601012.SH': 10.85, '688599.SH': 7.82,  '300274.SZ': 38.5,
+  '301636.SZ': 18.5,  '603778.SH': 12.5,  '603212.SH': 8.5,
+  '300827.SZ': 28.6,  '002079.SZ': 6.85,
+  // 证券（ths_881157.TI）
+  '600030.SH': 28.5,  '601688.SH': 18.6,  '000776.SZ': 22.5,
+  '600061.SH': 8.5,   '002945.SZ': 5.85,  '601099.SH': 3.85,
+  '601236.SH': 6.25,  '002736.SZ': 12.8,
+  // 医疗器械（ths_881144.TI）
+  '300760.SZ': 268.5, '688301.SH': 85.6,  '300453.SZ': 22.8,
+  '300642.SZ': 18.5,  '002086.SZ': 5.85,  '600587.SH': 12.5,
+  '300685.SZ': 28.6,  '301515.SZ': 15.8,
+  // 汽车整车（ths_881125.TI）
+  '002594.SZ': 328.5, '601127.SH': 128.5, '000550.SZ': 22.8,
+  '600686.SH': 8.5,   '600006.SH': 3.85,  '601777.SH': 18.5,
+  '600166.SH': 5.85,  '000951.SZ': 6.25,
+  // 软件开发（ths_881272.TI）
+  '300033.SZ': 28.5,  '688588.SH': 38.6,  '300465.SZ': 18.5,
+  '601519.SH': 12.8,  '688631.SH': 22.5,  '688246.SH': 35.6,
+  '301185.SZ': 15.8,  '301195.SZ': 18.5,
+  // 通信设备（ths_881129.TI）
+  '300308.SZ': 28.5,  '000070.SZ': 8.5,   '600776.SH': 18.6,
+  '603118.SH': 22.8,  '002104.SZ': 12.5,  '300913.SZ': 38.5,
+  '603421.SH': 15.8,  '603803.SH': 12.5,
+  // 钢铁（ths_881112.TI）
+  '600516.SH': 8.5,   '002075.SZ': 5.85,  '600569.SH': 3.85,
+  '603995.SH': 12.8,  '600022.SH': 2.85,  '600117.SH': 5.25,
+  '600295.SH': 8.5,   '000932.SZ': 3.85,
+  // 军工装备（ths_881166.TI）
   '600760.SH': 68.5,  '600893.SH': 28.9,  '002414.SZ': 35.6,
-  '002179.SZ': 45.2,  '688596.SH': 22.5,
-  // 贵金属
-  '600547.SH': 28.5,  '601899.SH': 15.8,  '600489.SH': 22.5,
-  '002155.SZ': 18.6,  '000975.SZ': 12.5,
+  '002179.SZ': 45.2,  '000768.SZ': 22.5,
+  // 贵金属（ths_881169.TI）
+  '600547.SH': 28.5,  '601899.SH': 18.8,  '600489.SH': 22.5,
+  '002155.SZ': 15.6,  '000975.SZ': 12.5,
 };
 
 export function getStockBasePrice(tsCode: string): number {
@@ -1133,14 +1203,17 @@ export function genStockFina(tsCode: string): {
   balance: StockBalance;
 } {
   const base = getStockBasePrice(tsCode);
-  const totalAssets = parseFloat((base * (1e8 + Math.random() * 1e10) / 1e8 * 2).toFixed(2));
+  // 数据库存储单位：元（与 Tushare stock_income/stock_balance 一致）
+  // base 是股价（元），用市值估算资产规模
+  const shareCount = 1e9 + Math.random() * 5e9; // 股本（股）
+  const totalAssets = parseFloat((base * shareCount * (2 + Math.random() * 3)).toFixed(2)); // 元
   const totalLiab = parseFloat((totalAssets * (0.3 + Math.random() * 0.4)).toFixed(2));
   const equity = totalAssets - totalLiab;
   const revenue = parseFloat((totalAssets * (0.3 + Math.random() * 0.5)).toFixed(2));
   const grossProfit = parseFloat((revenue * (0.2 + Math.random() * 0.4)).toFixed(2));
   const netProfit = parseFloat((grossProfit * (0.3 + Math.random() * 0.5)).toFixed(2));
-  const eps = parseFloat((netProfit / (1e8 + Math.random() * 1e9) * 1e8).toFixed(4));
-  const bps = parseFloat((equity / (1e8 + Math.random() * 1e9) * 1e8).toFixed(4));
+  const eps = parseFloat((netProfit / shareCount).toFixed(4));
+  const bps = parseFloat((equity / shareCount).toFixed(4));
 
   return {
     fina: {
