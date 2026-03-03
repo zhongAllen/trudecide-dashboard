@@ -46,6 +46,25 @@ const UP_COLOR   = '#ef4444';
 const DOWN_COLOR = '#22c55e';
 const FLAT_COLOR = '#94a3b8';
 
+// ─── 分数段常量表（唯一数据源，REQ-145）─────────────────────────────────────────
+// 收起时的 status label、展开后的分数段说明，均从此表派生，保证一致性
+export const SCORE_BANDS = [
+  { lo: 85, hi: 100, label: '极强',    color: '#dc2626' },
+  { lo: 70, hi: 84,  label: '偏强',    color: '#ea580c' },
+  { lo: 55, hi: 69,  label: '中性偏强', color: '#d97706' },
+  { lo: 45, hi: 54,  label: '中性',    color: '#6b7280' },
+  { lo: 30, hi: 44,  label: '中性偏弱', color: '#0284c7' },
+  { lo: 15, hi: 29,  label: '偏弱',    color: '#2563eb' },
+  { lo: 0,  hi: 14,  label: '极弱',    color: '#1d4ed8' },
+] as const;
+
+export type ScoreBand = typeof SCORE_BANDS[number];
+
+/** 根据分数返回对应的分数段（含 label / color） */
+export function getScoreBand(score: number): ScoreBand {
+  return SCORE_BANDS.find(b => score >= b.lo && score <= b.hi) ?? SCORE_BANDS[3];
+}
+
 function pctColor(v: number) {
   if (v > 0.01) return UP_COLOR;
   if (v < -0.01) return DOWN_COLOR;
@@ -113,29 +132,34 @@ function MiniLineChart({ indicatorId, color = '#3b82f6' }: { indicatorId: string
   );
 }
 
-// ─── 矩阵单元格评分颜色 ──────────────────────────────────────────────────────
+// ─── 矩阵单元格评分颜色（均从 SCORE_BANDS 派生，不允许单独修改）──────────────────────────────────────────────────────────────────
 function cellScoreColor(score: number): string {
-  if (score >= 70) return '#ef4444';
-  if (score >= 55) return '#f59e0b';
-  if (score >= 45) return '#94a3b8';
-  if (score >= 30) return '#3b82f6';
-  return '#22c55e';
+  return getScoreBand(score).color;
 }
 
 function cellBgClass(score: number): string {
-  if (score >= 70) return 'bg-red-50 border-red-100';
+  if (score >= 85) return 'bg-red-50 border-red-100';
+  if (score >= 70) return 'bg-orange-50 border-orange-100';
   if (score >= 55) return 'bg-amber-50 border-amber-100';
   if (score >= 45) return 'bg-gray-50 border-gray-100';
-  if (score >= 30) return 'bg-blue-50 border-blue-100';
-  return 'bg-green-50 border-green-100';
+  if (score >= 30) return 'bg-sky-50 border-sky-100';
+  if (score >= 15) return 'bg-blue-50 border-blue-100';
+  return 'bg-indigo-50 border-indigo-100';
 }
 
 function cellStatusClass(score: number): string {
-  if (score >= 70) return 'text-red-700 bg-red-100';
+  if (score >= 85) return 'text-red-700 bg-red-100';
+  if (score >= 70) return 'text-orange-700 bg-orange-100';
   if (score >= 55) return 'text-amber-700 bg-amber-100';
   if (score >= 45) return 'text-gray-600 bg-gray-100';
-  if (score >= 30) return 'text-blue-700 bg-blue-100';
-  return 'text-green-700 bg-green-100';
+  if (score >= 30) return 'text-sky-700 bg-sky-100';
+  if (score >= 15) return 'text-blue-700 bg-blue-100';
+  return 'text-indigo-700 bg-indigo-100';
+}
+
+/** 单元格收起时显示的定性标签：直接从 SCORE_BANDS 派生，不使用 cell.status 字段 */
+function cellLabel(score: number): string {
+  return getScoreBand(score).label;
 }
 
 function TrendArrow({ trend }: { trend: MatrixCell['trend'] }) {
@@ -200,21 +224,12 @@ function CellExpandPanel({ cell, dimension, period }: {
           <div className="bg-white/70 rounded-lg px-2.5 py-2 border border-white/60">
             <div className="text-[9px] text-gray-400 font-medium uppercase tracking-wide mb-1.5">分数段说明（满分100）</div>
             <div className="flex gap-1 flex-wrap">
-              {[
-                { range: '85–100', label: '极强', color: '#dc2626' },
-                { range: '70–84', label: '偏强', color: '#ea580c' },
-                { range: '55–69', label: '中性偏强', color: '#d97706' },
-                { range: '45–54', label: '中性', color: '#6b7280' },
-                { range: '30–44', label: '中性偏弱', color: '#0284c7' },
-                { range: '15–29', label: '偏弱', color: '#2563eb' },
-                { range: '0–14', label: '极弱', color: '#1d4ed8' },
-              ].map(band => {
+              {SCORE_BANDS.map(band => {
                 const score = cell.score;
-                const [lo, hi] = band.range.split('–').map(Number);
-                const isActive = score >= lo && score <= hi;
+                const isActive = score >= band.lo && score <= band.hi;
                 return (
                   <div
-                    key={band.range}
+                    key={`${band.lo}-${band.hi}`}
                     className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium border transition-all ${
                       isActive ? 'ring-1 ring-offset-0' : 'opacity-50'
                     }`}
@@ -226,7 +241,7 @@ function CellExpandPanel({ cell, dimension, period }: {
                     }}
                   >
                     {isActive && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: band.color }} />}
-                    <span>{band.range}</span>
+                    <span>{band.lo}–{band.hi}</span>
                     <span className="font-bold">{band.label}</span>
                     {isActive && <span className="ml-0.5 font-bold">← {score}分</span>}
                   </div>
@@ -436,7 +451,7 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${cellStatusClass(cell.score)}`}>
-                      {cell.status}
+                      {cellLabel(cell.score)}
                     </span>
                     <div className="flex items-center gap-1">
                       <TrendArrow trend={cell.trend} />
@@ -482,7 +497,7 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
               <div key={p.key} className={`px-3 py-3 border-l border-gray-200 ${cellBgClass(cell.score)}`}>
                 <div className="flex items-center justify-between mb-1">
                   <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${cellStatusClass(cell.score)}`}>
-                    {cell.status}
+                    {cellLabel(cell.score)}
                   </span>
                   <TrendArrow trend={cell.trend} />
                 </div>
