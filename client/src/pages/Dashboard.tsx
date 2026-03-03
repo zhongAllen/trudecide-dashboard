@@ -507,8 +507,11 @@ export default function Dashboard() {
           <Button variant="ghost" size="sm" onClick={loadAll} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </Button>
-          <Link href="/">
-            <Button variant="outline" size="sm" className="text-xs">宏观矩阵</Button>
+          <Link href="/admin/data">
+            <Button variant="outline" size="sm" className="text-xs">数据资产</Button>
+          </Link>
+          <Link href="/knowledge">
+            <Button variant="outline" size="sm" className="text-xs">知识库</Button>
           </Link>
           <Link href="/topdown">
             <Button variant="outline" size="sm" className="text-xs">选股</Button>
