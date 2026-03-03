@@ -7,11 +7,25 @@
  *   indicator_values: indicator_id, trade_date, publish_date, value, revision_seq, collected_at, region
  *   indicator_meta:   id, name_cn, category, unit, scale, region, frequency
  *   sector_meta:      id, name_cn, system, level, parent_id, idx_type, is_active
- *   sector_daily:     sector_id, trade_date, open, high, low, close, pct_change, vol, amount, up_num, down_num, avg_pe, total_mv, turnover_rate, leading_code, leading_name, leading_pct
+ *   sector_daily:     sector_id, trade_date, open, high, low, close, pct_change, vol, amount,
+ *                     up_num, down_num, flat_num, avg_pe, total_mv, turnover_rate,
+ *                     leading_code, leading_name, leading_pct
  *   sector_stock_map: sector_id, ts_code, in_date, out_date, is_current, system
  *   stock_meta:       ts_code, symbol, name_cn, area, industry, market, list_date, is_active
- *   stock_daily:      ts_code, trade_date, open, high, low, close, pre_close, pct_chg, vol, amount, adj_factor, pe_ttm, pb, total_mv, circ_mv
- *   stock_daily_basic:ts_code, trade_date, close, turnover_rate, turnover_rate_f, volume_ratio, pe, pe_ttm, pb, ps_ttm, dv_ratio, total_share, float_share, total_mv, circ_mv
+ *   stock_daily:      ts_code, trade_date, open, high, low, close, pre_close, pct_chg, vol, amount
+ *   stock_daily_basic:ts_code, trade_date, close, turnover_rate, turnover_rate_f, volume_ratio,
+ *                     pe, pe_ttm, pb, ps, ps_ttm, dv_ratio, total_share, float_share, total_mv, circ_mv
+ *   stock_moneyflow:  ts_code, trade_date, source, net_amount, net_amount_rate,
+ *                     buy_elg_amount, buy_elg_rate, buy_lg_amount, buy_lg_rate,
+ *                     buy_md_amount, buy_md_rate, buy_sm_amount, buy_sm_rate
+ *   stock_fina_indicator: ts_code, ann_date, end_date, eps, bps, roe, roa,
+ *                     grossprofit_margin, netprofit_margin, debt_to_assets,
+ *                     current_ratio, quick_ratio, basic_eps_yoy, netprofit_yoy, or_yoy
+ *   stock_income:     ts_code, ann_date, end_date, total_revenue, revenue, operate_profit,
+ *                     total_profit, n_income, n_income_attr_p, basic_eps, ebit, ebitda, rd_exp
+ *   stock_balance:    ts_code, ann_date, end_date, total_assets, total_liab,
+ *                     total_hldr_eqy_exc_min_int, money_cap, accounts_receiv, inventories, lt_borr, st_borr
+ *   stock_announcement: ts_code, ann_date, ann_type, title, url, content, collected_at
  */
 
 // ─── 类型定义（与数据库字段一一对应）─────────────────────────────────────────
@@ -115,6 +129,7 @@ export interface StockDailyBasic {
   pe: number | null;
   pe_ttm: number | null;
   pb: number | null;
+  ps: number | null;
   ps_ttm: number | null;
   dv_ratio: number | null;
   total_share: number | null;
@@ -123,22 +138,129 @@ export interface StockDailyBasic {
   circ_mv: number | null;
 }
 
+// 资金流向（stock_moneyflow 格式）
+export interface StockMoneyflow {
+  ts_code: string;
+  trade_date: string;
+  source: string;
+  net_amount: number | null;        // 净流入（万元）
+  net_amount_rate: number | null;
+  buy_elg_amount: number | null;    // 特大单买入（万元）
+  buy_elg_rate: number | null;
+  buy_lg_amount: number | null;     // 大单买入（万元）
+  buy_lg_rate: number | null;
+  buy_md_amount: number | null;     // 中单买入（万元）
+  buy_md_rate: number | null;
+  buy_sm_amount: number | null;     // 小单买入（万元）
+  buy_sm_rate: number | null;
+}
+
+// 财务指标（stock_fina_indicator 格式）
+export interface StockFinaIndicator {
+  ts_code: string;
+  ann_date: string;
+  end_date: string;
+  eps: number | null;               // 基本每股收益
+  bps: number | null;               // 每股净资产
+  roe: number | null;               // 净资产收益率(%)
+  roa: number | null;               // 总资产净利率(%)
+  grossprofit_margin: number | null; // 销售毛利率(%)
+  netprofit_margin: number | null;   // 销售净利率(%)
+  debt_to_assets: number | null;     // 资产负债率(%)
+  current_ratio: number | null;      // 流动比率
+  quick_ratio: number | null;        // 速动比率
+  basic_eps_yoy: number | null;      // 基本每股收益同比(%)
+  netprofit_yoy: number | null;      // 归母净利润同比(%)
+  or_yoy: number | null;             // 营业收入同比(%)
+}
+
+// 利润表（stock_income 格式）
+export interface StockIncome {
+  ts_code: string;
+  ann_date: string;
+  end_date: string;
+  total_revenue: number | null;      // 营业总收入
+  revenue: number | null;            // 营业收入
+  operate_profit: number | null;     // 营业利润
+  total_profit: number | null;       // 利润总额
+  n_income: number | null;           // 净利润
+  n_income_attr_p: number | null;    // 归母净利润
+  basic_eps: number | null;          // 基本每股收益
+  ebit: number | null;               // 息税前利润
+  ebitda: number | null;             // 息税折旧摊销前利润
+  rd_exp: number | null;             // 研发费用
+}
+
+// 资产负债表（stock_balance 格式）
+export interface StockBalance {
+  ts_code: string;
+  ann_date: string;
+  end_date: string;
+  total_assets: number | null;                   // 总资产
+  total_liab: number | null;                     // 总负债
+  total_hldr_eqy_exc_min_int: number | null;     // 归母净资产
+  money_cap: number | null;                      // 货币资金
+  accounts_receiv: number | null;                // 应收账款
+  inventories: number | null;                    // 存货
+  lt_borr: number | null;                        // 长期借款
+  st_borr: number | null;                        // 短期借款
+}
+
+// 公告（stock_announcement 格式）
+export interface StockAnnouncement {
+  ts_code: string;
+  ann_date: string;
+  ann_type: string;   // annual/semi/quarter/other
+  title: string;
+  url: string | null;
+  content: string | null;
+  collected_at: string;
+}
+
 // ─── 宏观择时 Mock 数据 ────────────────────────────────────────────────────────
+// 指标 id 和 name_cn 与 indicator_meta 表保持完全一致（region=CN）
 
 export const MACRO_INDICATORS: IndicatorMeta[] = [
+  // category: macro
   { id: 'gdp_yoy', name_cn: 'GDP同比增速', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'quarterly' },
+  { id: 'gdp_qoq', name_cn: 'GDP季比增速', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'quarterly' },
   { id: 'pmi_mfg', name_cn: '制造业PMI', category: 'macro', unit: '点', scale: null, region: 'CN', frequency: 'monthly' },
-  { id: 'cpi_yoy', name_cn: 'CPI同比', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
-  { id: 'ppi_yoy', name_cn: 'PPI同比', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'pmi_non_mfg', name_cn: '非制造业PMI', category: 'macro', unit: '点', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'cpi_yoy', name_cn: 'CPI同比增速', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'cpi_mom', name_cn: 'CPI环比', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'ppi_yoy', name_cn: 'PPI同比增速', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
   { id: 'm2_yoy', name_cn: 'M2同比增速', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
-  { id: 'social_financing_yoy', name_cn: '社融同比增速', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
-  { id: 'hs300_pe', name_cn: '沪深300 PE(TTM)', category: 'equity', unit: '倍', scale: null, region: 'CN', frequency: 'daily' },
-  { id: 'all_a_pe', name_cn: '全A市盈率', category: 'equity', unit: '倍', scale: null, region: 'CN', frequency: 'daily' },
-  { id: 'north_daily_turnover', name_cn: '北向资金净流入', category: 'equity', unit: '亿元', scale: '亿', region: 'CN', frequency: 'daily' },
-  { id: 'rmb_usd', name_cn: '人民币兑美元', category: 'fx', unit: '元/美元', scale: null, region: 'CN', frequency: 'daily' },
-  { id: 'lpr_1y', name_cn: 'LPR 1年期', category: 'rate', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
-  { id: 'bond_10y', name_cn: '10年期国债收益率', category: 'rate', unit: '%', scale: null, region: 'CN', frequency: 'daily' },
-  { id: 'dr007', name_cn: 'DR007', category: 'rate', unit: '%', scale: null, region: 'CN', frequency: 'daily' },
+  { id: 'm2_level', name_cn: 'M2余额', category: 'macro', unit: '亿元', scale: '亿', region: 'CN', frequency: 'monthly' },
+  { id: 'social_finance_yoy', name_cn: '社融存量同比', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'social_finance_new', name_cn: '社会融资规模增量', category: 'macro', unit: '亿元', scale: '亿', region: 'CN', frequency: 'monthly' },
+  { id: 'new_loans', name_cn: '新增人民币贷款', category: 'macro', unit: '亿元', scale: '亿', region: 'CN', frequency: 'monthly' },
+  { id: 'export_yoy', name_cn: '出口金额同比', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'import_yoy', name_cn: '进口金额同比', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'fai_yoy', name_cn: '固定资产投资同比', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'industrial_yoy', name_cn: '工业增加值同比', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'retail_yoy', name_cn: '社会消费品零售总额同比', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'unemployment_rate', name_cn: '城镇调查失业率', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'trade_balance', name_cn: '中国贸易差额（美元口径）', category: 'macro', unit: '亿美元', scale: '亿', region: 'CN', frequency: 'monthly' },
+  // category: macro（利率）
+  { id: 'lpr_1y', name_cn: '1年期LPR', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'lpr_5y', name_cn: '5年期LPR', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'monthly' },
+  { id: 'bond_10y', name_cn: '中国10年期国债收益率', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'daily' },
+  { id: 'dr007', name_cn: '银行间质押式回购利率DR007', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'daily' },
+  { id: 'dr001', name_cn: '银行间质押式回购利率DR001', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'daily' },
+  { id: 'shibor_on', name_cn: 'Shibor隔夜', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'daily' },
+  { id: 'shibor_1w', name_cn: 'Shibor1周', category: 'macro', unit: '%', scale: null, region: 'CN', frequency: 'daily' },
+  // category: equity
+  { id: 'hs300_pe', name_cn: '沪深300 PE（滚动TTM）', category: 'equity', unit: '倍', scale: null, region: 'CN', frequency: 'daily' },
+  { id: 'all_a_pe', name_cn: '上证市场平均市盈率', category: 'equity', unit: '倍', scale: null, region: 'CN', frequency: 'daily' },
+  { id: 'hs300_pb', name_cn: '沪深300 PB（加权）', category: 'equity', unit: '倍', scale: null, region: 'CN', frequency: 'daily' },
+  { id: 'all_a_pb', name_cn: '全A市场PB（等权中位数）', category: 'equity', unit: '倍', scale: null, region: 'CN', frequency: 'daily' },
+  { id: 'north_net_flow', name_cn: '北向资金净流入', category: 'equity', unit: '亿元', scale: '亿', region: 'CN', frequency: 'daily' },
+  { id: 'north_daily_turnover', name_cn: '北向当日成交总额', category: 'equity', unit: '亿元', scale: '亿', region: 'CN', frequency: 'daily' },
+  { id: 'total_market_turnover', name_cn: '全A日成交额', category: 'equity', unit: '亿元', scale: '亿', region: 'CN', frequency: 'daily' },
+  { id: 'margin_balance_sh', name_cn: '上交所融资余额', category: 'equity', unit: '亿元', scale: '亿', region: 'CN', frequency: 'daily' },
+  { id: 'margin_balance_sz', name_cn: '深交所融资余额', category: 'equity', unit: '亿元', scale: '亿', region: 'CN', frequency: 'daily' },
+  // category: fx
+  { id: 'rmb_usd', name_cn: '人民币兑美元中间价', category: 'fx', unit: '元/百美元', scale: null, region: 'CN', frequency: 'daily' },
 ];
 
 // 最近12个月宏观数据（indicator_values 格式）
@@ -163,98 +285,485 @@ function genMonthlyValues(id: string, baseVal: number, trend: number, volatility
 
 export const MACRO_VALUES: Record<string, IndicatorValue[]> = {
   gdp_yoy: genMonthlyValues('gdp_yoy', 4.8, 0.3, 0.2),
+  gdp_qoq: genMonthlyValues('gdp_qoq', 1.2, 0.1, 0.1),
   pmi_mfg: genMonthlyValues('pmi_mfg', 49.8, 0.5, 0.4),
+  pmi_non_mfg: genMonthlyValues('pmi_non_mfg', 50.5, 0.3, 0.3),
   cpi_yoy: genMonthlyValues('cpi_yoy', 0.1, 0.2, 0.15),
+  cpi_mom: genMonthlyValues('cpi_mom', 0.0, 0.05, 0.1),
   ppi_yoy: genMonthlyValues('ppi_yoy', -2.1, 0.8, 0.3),
   m2_yoy: genMonthlyValues('m2_yoy', 7.0, 0.5, 0.3),
-  social_financing_yoy: genMonthlyValues('social_financing_yoy', 8.1, 0.4, 0.4),
-  hs300_pe: genMonthlyValues('hs300_pe', 11.5, 0.8, 0.5),
-  all_a_pe: genMonthlyValues('all_a_pe', 15.2, 0.6, 0.4),
-  north_daily_turnover: genMonthlyValues('north_daily_turnover', 45.2, 8.0, 15.0),
-  rmb_usd: genMonthlyValues('rmb_usd', 7.28, -0.05, 0.02),
+  m2_level: genMonthlyValues('m2_level', 3100000, 5000, 1000),
+  social_finance_yoy: genMonthlyValues('social_finance_yoy', 8.1, 0.4, 0.4),
+  social_finance_new: genMonthlyValues('social_finance_new', 15000, 500, 2000),
+  new_loans: genMonthlyValues('new_loans', 12000, 300, 1500),
+  export_yoy: genMonthlyValues('export_yoy', -2.1, 1.0, 1.5),
+  import_yoy: genMonthlyValues('import_yoy', -1.5, 0.8, 1.2),
+  fai_yoy: genMonthlyValues('fai_yoy', 3.5, 0.2, 0.3),
+  industrial_yoy: genMonthlyValues('industrial_yoy', 5.8, 0.3, 0.4),
+  retail_yoy: genMonthlyValues('retail_yoy', 4.2, 0.5, 0.5),
+  unemployment_rate: genMonthlyValues('unemployment_rate', 5.1, -0.1, 0.1),
+  trade_balance: genMonthlyValues('trade_balance', 850, -20, 50),
   lpr_1y: genMonthlyValues('lpr_1y', 3.1, -0.05, 0.01),
+  lpr_5y: genMonthlyValues('lpr_5y', 3.6, -0.05, 0.01),
   bond_10y: genMonthlyValues('bond_10y', 2.3, -0.1, 0.05),
   dr007: genMonthlyValues('dr007', 1.8, -0.05, 0.05),
+  dr001: genMonthlyValues('dr001', 1.6, -0.05, 0.05),
+  shibor_on: genMonthlyValues('shibor_on', 1.65, -0.05, 0.05),
+  shibor_1w: genMonthlyValues('shibor_1w', 1.85, -0.05, 0.05),
+  hs300_pe: genMonthlyValues('hs300_pe', 11.5, 0.8, 0.5),
+  all_a_pe: genMonthlyValues('all_a_pe', 15.2, 0.6, 0.4),
+  hs300_pb: genMonthlyValues('hs300_pb', 1.28, 0.05, 0.03),
+  all_a_pb: genMonthlyValues('all_a_pb', 1.65, 0.08, 0.05),
+  north_net_flow: genMonthlyValues('north_net_flow', 45.2, 8.0, 15.0),
+  north_daily_turnover: genMonthlyValues('north_daily_turnover', 850, 50, 100),
+  total_market_turnover: genMonthlyValues('total_market_turnover', 12000, 500, 1000),
+  margin_balance_sh: genMonthlyValues('margin_balance_sh', 9500, 200, 300),
+  margin_balance_sz: genMonthlyValues('margin_balance_sz', 8800, 150, 250),
+  rmb_usd: genMonthlyValues('rmb_usd', 728.5, -0.5, 0.2),
 };
 
-// 宏观择时信号（综合打分）
-export interface MacroSignal {
-  dimension: string;
-  signal: 'bullish' | 'neutral' | 'bearish';
-  score: number; // 0-100
-  desc: string;
-  indicators: string[];
+// ─── 宏观状态矩阵类型定义 ─────────────────────────────────────────────────────
+
+export type MatrixRegion = 'CN' | 'US';
+
+export interface MatrixCell {
+  status: string;           // 状态标签（如"扩张"、"宽松"）
+  score: number;            // 综合评分 0-100
+  trend: 'up' | 'down' | 'flat';
+  desc: string;             // 详细描述
+  indicators: string[];     // 关联的 indicator_id 列表（与 indicator_meta.id 一致）
+  data_quality: 'live' | 'mock' | 'warn';
 }
 
-export const MACRO_SIGNALS: MacroSignal[] = [
-  {
-    dimension: '经济增长',
-    signal: 'bullish',
-    score: 68,
-    desc: 'GDP同比5.1%，PMI连续2月回升至50.2，经济动能温和修复',
-    indicators: ['gdp_yoy', 'pmi_mfg'],
+export interface MacroMatrixRow {
+  dimension: string;        // 维度名称（与 indicator_meta.category 对应的业务分类）
+  a_stock_corr: '正相关' | '负相关' | '弱相关';
+  short: MatrixCell;        // 短期（3-9个月）
+  mid: MatrixCell;          // 中期（2-3年）
+  long: MatrixCell;         // 长期（5-10年）
+}
+
+export interface MacroMatrix {
+  region: MatrixRegion;
+  snapshot_date: string;       // 快照日期（YYYYMM，对应 indicator_values.trade_date）
+  model_version: string;
+  rows: MacroMatrixRow[];
+  summary: {                   // 综合评估行
+    short: MatrixCell;
+    mid: MatrixCell;
+    long: MatrixCell;
+  };
+}
+
+// 中国宏观状态矩阵（CN）
+// 维度名称与 indicator_meta.name_cn 保持一致
+export const MACRO_MATRIX_CN: MacroMatrix = {
+  region: 'CN',
+  snapshot_date: '202603',
+  model_version: 'v1',
+  rows: [
+    // ── 维度1：经济周期位置 ──────────────────────────────────────────────────
+    // 数据来源：pmi_mfg, pmi_non_mfg, gdp_yoy, gdp_qoq, industrial_yoy,
+    //           retail_yoy, fai_yoy, export_yoy, import_yoy, unemployment_rate
+    {
+      dimension: '经济周期位置',
+      a_stock_corr: '正相关',
+      short: {
+        status: '扩张',
+        score: 80,
+        trend: 'up',
+        desc: '制造业PMI连续2月回升至50.2，非制造业PMI=52.3，工业增加值同比+5.8%，GDP同比5.1%，零售同比+4.2%，经济动能温和扩张',
+        indicators: ['pmi_mfg', 'pmi_non_mfg', 'gdp_yoy', 'industrial_yoy', 'retail_yoy'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '复苏',
+        score: 62,
+        trend: 'up',
+        desc: '内需修复节奏偏慢，出口金额同比-2.1%受外部压制，固定资产投资同比+3.5%，中期复苏路径存不确定性',
+        indicators: ['gdp_yoy', 'gdp_qoq', 'fai_yoy', 'export_yoy', 'import_yoy', 'unemployment_rate'],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 50,
+        trend: 'flat',
+        desc: '人口结构老龄化、债务周期高位等长期因素制约潜在增速，长期中性判断',
+        indicators: ['gdp_yoy', 'unemployment_rate'],
+        data_quality: 'mock',
+      },
+    },
+    // ── 维度2：货币政策信号 ──────────────────────────────────────────────────
+    // 数据来源：lpr_1y, lpr_5y, dr007, dr001, shibor_on, shibor_1w, bond_10y
+    {
+      dimension: '货币政策信号',
+      a_stock_corr: '正相关',
+      short: {
+        status: '宽松',
+        score: 75,
+        trend: 'up',
+        desc: '1年期LPR=3.1%（历史低位），银行间质押式回购利率DR007=1.8%，中国10年期国债收益率=2.3%，货币政策明确宽松取向',
+        indicators: ['lpr_1y', 'lpr_5y', 'dr007', 'dr001', 'shibor_on', 'shibor_1w', 'bond_10y'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '适度宽松',
+        score: 68,
+        trend: 'flat',
+        desc: '实际利率偏低，人民币兑美元中间价=7.25汇率约束限制进一步宽松幅度，中期适度宽松',
+        indicators: ['bond_10y', 'rmb_usd', 'lpr_1y'],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 55,
+        trend: 'flat',
+        desc: '利率中枢长期下行趋势确立，但债务扩张空间收窄，长期中性',
+        indicators: ['bond_10y', 'lpr_1y'],
+        data_quality: 'mock',
+      },
+    },
+    // ── 维度3：政策底确认 ────────────────────────────────────────────────────
+    // 数据来源：社会融资规模增量, 社融存量同比, 新增人民币贷款, M2同比增速
+    {
+      dimension: '政策底确认',
+      a_stock_corr: '正相关',
+      short: {
+        status: '温和宽松',
+        score: 70,
+        trend: 'up',
+        desc: '社会融资规模增量同比多增1.2万亿，新增人民币贷款1.5万亿，财政赤字率提升至4%，专项债加速发行',
+        indicators: ['social_finance_new', 'social_finance_yoy', 'new_loans', 'm2_yoy'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '强刺激',
+        score: 78,
+        trend: 'up',
+        desc: '政策组合拳力度超预期（货币+财政+地产），科技+消费双轮驱动，社融存量同比+8.2%，市场预期明显改善',
+        indicators: ['social_finance_yoy', 'm2_yoy', 'new_loans'],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 52,
+        trend: 'flat',
+        desc: '结构性改革持续推进，但外部环境不确定性和债务约束限制长期政策空间',
+        indicators: ['social_finance_yoy', 'm2_yoy'],
+        data_quality: 'mock',
+      },
+    },
+    // ── 维度4：流动性环境 ────────────────────────────────────────────────────
+    // 数据来源：M2同比增速, M2余额, 社融存量同比, 北向资金净流入, 北向当日成交总额,
+    //           全A日成交额, 上交所融资余额, 深交所融资余额
+    {
+      dimension: '流动性环境',
+      a_stock_corr: '正相关',
+      short: {
+        status: '充裕',
+        score: 72,
+        trend: 'up',
+        desc: 'M2同比增速7.5%，全A日成交额1.2万亿，北向资金净流入+85亿，上交所融资余额1.85万亿，资金面活跃',
+        indicators: ['m2_yoy', 'total_market_turnover', 'north_net_flow', 'north_daily_turnover', 'margin_balance_sh', 'margin_balance_sz'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '适度充裕',
+        score: 65,
+        trend: 'flat',
+        desc: '社融存量同比8.2%，北向当日成交总额占全A比例6.8%，中期流动性适度充裕，支撑市场运行',
+        indicators: ['social_finance_yoy', 'north_daily_turnover', 'm2_yoy'],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 55,
+        trend: 'flat',
+        desc: '人民币国际化推进，但资本账户管制限制外资长期流入规模，长期中性',
+        indicators: ['m2_yoy', 'rmb_usd', 'north_daily_turnover'],
+        data_quality: 'mock',
+      },
+    },
+    // ── 维度5：外部环境 ──────────────────────────────────────────────────────
+    // 数据来源：人民币兑美元中间价, 中国贸易差额, 出口金额同比, 进口金额同比
+    {
+      dimension: '外部环境',
+      a_stock_corr: '正相关',
+      short: {
+        status: '中性偏压',
+        score: 45,
+        trend: 'down',
+        desc: '人民币兑美元中间价7.25，中国贸易差额收窄，关税摩擦升温，外部冲击处于可控但偏压状态',
+        indicators: ['rmb_usd', 'trade_balance', 'export_yoy', 'import_yoy'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '中性',
+        score: 50,
+        trend: 'flat',
+        desc: '贸易多元化布局推进，东南亚出口替代效应显现，中期外部压力边际缓解',
+        indicators: ['trade_balance', 'export_yoy', 'import_yoy', 'rmb_usd'],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 48,
+        trend: 'flat',
+        desc: '全球化格局重塑，中国在全球供应链中的地位调整是长期变量，中性判断',
+        indicators: ['trade_balance', 'export_yoy', 'rmb_usd'],
+        data_quality: 'mock',
+      },
+    },
+  ],
+  summary: {
+    short: {
+      status: '复苏',
+      score: 70,
+      trend: 'up',
+      desc: '短期宏观环境偏多，经济扩张+流动性宽松+政策发力，建议积极配置',
+      indicators: [],
+      data_quality: 'mock',
+    },
+    mid: {
+      status: '复苏',
+      score: 68,
+      trend: 'up',
+      desc: '中期复苏路径确立，但节奏存在不确定性，建议均衡配置',
+      indicators: [],
+      data_quality: 'mock',
+    },
+    long: {
+      status: '中性',
+      score: 57,
+      trend: 'flat',
+      desc: '长期结构性机会存在，但整体中性，建议精选赛道',
+      indicators: [],
+      data_quality: 'mock',
+    },
   },
-  {
-    dimension: '通胀与货币',
-    signal: 'neutral',
-    score: 52,
-    desc: 'CPI温和，PPI仍负但收窄，M2/社融增速回升，流动性宽松',
-    indicators: ['cpi_yoy', 'ppi_yoy', 'm2_yoy', 'social_financing_yoy'],
+};
+
+// 美国宏观状态矩阵（US）— 同样使用 5 维度框架
+export const MACRO_MATRIX_US: MacroMatrix = {
+  region: 'US',
+  snapshot_date: '202603',
+  model_version: 'v1',
+  rows: [
+    {
+      dimension: '经济周期位置',
+      a_stock_corr: '弱相关',
+      short: {
+        status: '放缓',
+        score: 42,
+        trend: 'down',
+        desc: '美国GDP实际环比增速放缓至1.8%，美国服务业PMI收缩至47.8，非农就业增速下滑，软着陆预期动摇',
+        indicators: ['gdp_qoq', 'pmi_non_mfg', 'industrial_yoy'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '收缩',
+        score: 35,
+        trend: 'down',
+        desc: '高利率滞后效应显现，信贷收紧，消费支出放缓，衰退风险上升至35%',
+        indicators: ['gdp_qoq', 'industrial_yoy'],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 55,
+        trend: 'flat',
+        desc: '美国长期潜在增速约2%，AI技术革命带来生产力提升预期，长期中性偏乐观',
+        indicators: [],
+        data_quality: 'mock',
+      },
+    },
+    {
+      dimension: '货币政策信号',
+      a_stock_corr: '负相关',
+      short: {
+        status: '偏紧',
+        score: 35,
+        trend: 'flat',
+        desc: '联邦基金利率维持5.25-5.5%高位，实际利率约2.5%，货币政策仍处限制性区间',
+        indicators: [],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '适度宽松',
+        score: 60,
+        trend: 'up',
+        desc: '市场预期2026年降息2-3次，通胀回落至2.5%附近，货币政策转向预期升温',
+        indicators: [],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 50,
+        trend: 'flat',
+        desc: '美联储长期中性利率约2.5-3%，利率中枢较疫情前抬升，长期中性',
+        indicators: [],
+        data_quality: 'mock',
+      },
+    },
+    {
+      dimension: '政策底确认',
+      a_stock_corr: '弱相关',
+      short: {
+        status: '中性偏松',
+        score: 55,
+        trend: 'flat',
+        desc: '美国政府债务/GDP超120%，财政扩张空间受限，但科技补贴（CHIPS法案）持续落地',
+        indicators: ['govt_debt_gdp'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '中性',
+        score: 48,
+        trend: 'flat',
+        desc: '大选后政策不确定性上升，关税政策反复，财政可持续性存疑',
+        indicators: [],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 52,
+        trend: 'flat',
+        desc: '美国制造业回流政策长期推进，但财政赤字约束政策空间，长期中性',
+        indicators: [],
+        data_quality: 'mock',
+      },
+    },
+    {
+      dimension: '流动性环境',
+      a_stock_corr: '负相关',
+      short: {
+        status: '偏紧',
+        score: 38,
+        trend: 'flat',
+        desc: '美联储缩表仍在进行，美元指数高位（DXY≈105），全球美元流动性偏紧',
+        indicators: ['dxy'],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '改善',
+        score: 58,
+        trend: 'up',
+        desc: '降息预期推动美债收益率下行，流动性环境中期改善，对风险资产形成支撑',
+        indicators: [],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性',
+        score: 50,
+        trend: 'flat',
+        desc: '美元储备货币地位长期稳固，但去美元化趋势缓慢推进，长期中性',
+        indicators: [],
+        data_quality: 'mock',
+      },
+    },
+    {
+      dimension: '外部环境',
+      a_stock_corr: '弱相关',
+      short: {
+        status: '偏压',
+        score: 38,
+        trend: 'down',
+        desc: '中美贸易摩擦升温，关税政策反复，地缘政治风险（俄乌/台海）对全球市场形成压制',
+        indicators: [],
+        data_quality: 'mock',
+      },
+      mid: {
+        status: '中性',
+        score: 50,
+        trend: 'flat',
+        desc: '降息周期开启后新兴市场资金回流，全球贸易格局重塑中，中期外部环境中性',
+        indicators: [],
+        data_quality: 'mock',
+      },
+      long: {
+        status: '中性偏强',
+        score: 58,
+        trend: 'up',
+        desc: '美国AI产业机会与高估值风险并存，对A股长期影响有限',
+        indicators: [],
+        data_quality: 'mock',
+      },
+    },
+  ],
+  summary: {
+    short: {
+      status: '中性偏弱',
+      score: 42,
+      trend: 'down',
+      desc: '短期美国宏观偏弱，高利率+经济放缓，对A股影响中性偏负',
+      indicators: [],
+      data_quality: 'mock',
+    },
+    mid: {
+      status: '复苏',
+      score: 50,
+      trend: 'up',
+      desc: '降息周期开启后中期改善，美股科技股表现对A股示范效应显现，建议均衡配置',
+      indicators: [],
+      data_quality: 'mock',
+    },
+    long: {
+      status: '中性',
+      score: 53,
+      trend: 'flat',
+      desc: '长期中性，AI产业机会与高估值风险并存，对A股长期影响有限',
+      indicators: [],
+      data_quality: 'mock',
+    },
   },
-  {
-    dimension: '市场估值',
-    signal: 'bullish',
-    score: 72,
-    desc: '沪深300 PE(TTM)约12倍，处历史25%分位，估值偏低',
-    indicators: ['hs300_pe', 'all_a_pe'],
-  },
-  {
-    dimension: '资金面',
-    signal: 'neutral',
-    score: 55,
-    desc: '北向资金近期净流入，但汇率压力仍存，外资态度谨慎',
-    indicators: ['north_daily_turnover', 'rmb_usd'],
-  },
-];
+};
 
 // ─── 板块轮动 Mock 数据 ────────────────────────────────────────────────────────
+// 板块 id 和 name_cn 与数据库 sector_meta 表保持完全一致
+// 以下为 ths 二级行业板块（idx_type=行业板块，id=ths_881xxx.TI）
+// 数据库 sector_daily 中有数据的板块（trade_date=2026-02-27 已验证）
 
 export const SECTOR_META_LIST: SectorMeta[] = [
-  { id: 'ths_881101.TI', name_cn: '银行', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881102.TI', name_cn: '保险', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881103.TI', name_cn: '证券', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881201.TI', name_cn: '医药生物', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881202.TI', name_cn: '医疗器械', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881301.TI', name_cn: '新能源', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881302.TI', name_cn: '光伏', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881303.TI', name_cn: '储能', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881401.TI', name_cn: '半导体', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881402.TI', name_cn: '消费电子', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881403.TI', name_cn: '人工智能', system: 'ths', level: 1, parent_id: null, idx_type: '概念板块', is_active: true },
-  { id: 'ths_881501.TI', name_cn: '白酒', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881502.TI', name_cn: '食品饮料', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881601.TI', name_cn: '房地产', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881602.TI', name_cn: '建筑材料', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881701.TI', name_cn: '军工', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881801.TI', name_cn: '有色金属', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_881901.TI', name_cn: '化工', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_882001.TI', name_cn: '机械设备', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_882101.TI', name_cn: '传媒', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_882201.TI', name_cn: '汽车', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_882301.TI', name_cn: '电力', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_882401.TI', name_cn: '钢铁', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  { id: 'ths_882501.TI', name_cn: '农林牧渔', system: 'ths', level: 1, parent_id: null, idx_type: '行业板块', is_active: true },
-  // 概念板块
-  { id: 'ths_c_ai.TI', name_cn: 'AI大模型', system: 'ths', level: 1, parent_id: null, idx_type: '概念板块', is_active: true },
-  { id: 'ths_c_robot.TI', name_cn: '人形机器人', system: 'ths', level: 1, parent_id: null, idx_type: '概念板块', is_active: true },
-  { id: 'ths_c_huawei.TI', name_cn: '华为概念', system: 'ths', level: 1, parent_id: null, idx_type: '概念板块', is_active: true },
-  { id: 'ths_c_lowalt.TI', name_cn: '低空经济', system: 'ths', level: 1, parent_id: null, idx_type: '概念板块', is_active: true },
-  { id: 'ths_c_quantum.TI', name_cn: '量子计算', system: 'ths', level: 1, parent_id: null, idx_type: '概念板块', is_active: true },
-  // 风格板块
-  { id: 'ths_s_large.TI', name_cn: '大盘蓝筹', system: 'ths', level: 1, parent_id: null, idx_type: '风格板块', is_active: true },
-  { id: 'ths_s_small.TI', name_cn: '中小成长', system: 'ths', level: 1, parent_id: null, idx_type: '风格板块', is_active: true },
-  { id: 'ths_s_value.TI', name_cn: '价值', system: 'ths', level: 1, parent_id: null, idx_type: '风格板块', is_active: true },
-  { id: 'ths_s_growth.TI', name_cn: '成长', system: 'ths', level: 1, parent_id: null, idx_type: '风格板块', is_active: true },
+  // 金融
+  { id: 'ths_881155.TI', name_cn: '银行', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881157.TI', name_cn: '证券', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881156.TI', name_cn: '保险', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881283.TI', name_cn: '多元金融', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  // 科技/电子
+  { id: 'ths_881121.TI', name_cn: '半导体', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881124.TI', name_cn: '消费电子', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881122.TI', name_cn: '光学光电子', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881130.TI', name_cn: '计算机设备', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881272.TI', name_cn: '软件开发', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881271.TI', name_cn: 'IT服务', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881171.TI', name_cn: '自动化设备', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  // 新能源
+  { id: 'ths_881279.TI', name_cn: '光伏设备', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881281.TI', name_cn: '电池', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881280.TI', name_cn: '风电设备', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881145.TI', name_cn: '电力', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881278.TI', name_cn: '电网设备', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  // 医药
+  { id: 'ths_881144.TI', name_cn: '医疗器械', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881140.TI', name_cn: '化学制药', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881142.TI', name_cn: '生物制品', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881175.TI', name_cn: '医疗服务', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  // 消费
+  { id: 'ths_881273.TI', name_cn: '白酒', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881133.TI', name_cn: '饮料制造', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881125.TI', name_cn: '汽车整车', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881126.TI', name_cn: '汽车零部件', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881131.TI', name_cn: '白色家电', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  // 军工
+  { id: 'ths_881166.TI', name_cn: '军工装备', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881276.TI', name_cn: '军工电子', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  // 有色/资源
+  { id: 'ths_881169.TI', name_cn: '贵金属', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881267.TI', name_cn: '能源金属', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881112.TI', name_cn: '钢铁', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  // 通信
+  { id: 'ths_881129.TI', name_cn: '通信设备', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
+  { id: 'ths_881162.TI', name_cn: '通信服务', system: 'ths', level: 2, parent_id: null, idx_type: '行业板块', is_active: true },
 ];
 
 // 生成板块近期日线数据（sector_daily 格式）
@@ -295,40 +804,48 @@ function genSectorDaily(sectorId: string, baseClose: number, trend: number): Sec
 }
 
 // 板块趋势参数（trend > 0 偏多，< 0 偏空）
+// base 为指数基准点，与数据库 sector_daily.close 对应
 const SECTOR_TRENDS: Record<string, { base: number; trend: number }> = {
-  'ths_881101.TI': { base: 1200, trend: 2 },   // 银行 偏多
-  'ths_881102.TI': { base: 980, trend: 1.5 },   // 保险
-  'ths_881103.TI': { base: 1450, trend: 3 },    // 证券 强势
-  'ths_881201.TI': { base: 2100, trend: -0.5 }, // 医药 偏弱
-  'ths_881202.TI': { base: 1800, trend: 0.5 },  // 医疗器械
-  'ths_881301.TI': { base: 1600, trend: -1 },   // 新能源 偏弱
-  'ths_881302.TI': { base: 1200, trend: -1.5 }, // 光伏 弱
-  'ths_881303.TI': { base: 900, trend: 1 },     // 储能
-  'ths_881401.TI': { base: 3200, trend: 4 },    // 半导体 强势
-  'ths_881402.TI': { base: 2800, trend: 3.5 },  // 消费电子 强势
-  'ths_881403.TI': { base: 4500, trend: 5 },    // 人工智能 最强
-  'ths_881501.TI': { base: 1900, trend: -0.5 }, // 白酒 偏弱
-  'ths_881502.TI': { base: 1500, trend: 0 },    // 食品饮料
-  'ths_881601.TI': { base: 800, trend: -2 },    // 房地产 弱
-  'ths_881602.TI': { base: 700, trend: -1 },    // 建筑材料 弱
-  'ths_881701.TI': { base: 2200, trend: 2.5 },  // 军工 偏多
-  'ths_881801.TI': { base: 1700, trend: 1 },    // 有色金属
-  'ths_881901.TI': { base: 1100, trend: 0.5 },  // 化工
-  'ths_882001.TI': { base: 1300, trend: 1.5 },  // 机械设备
-  'ths_882101.TI': { base: 900, trend: 2 },     // 传媒
-  'ths_882201.TI': { base: 1600, trend: 3 },    // 汽车 偏多
-  'ths_882301.TI': { base: 1100, trend: 0.5 },  // 电力
-  'ths_882401.TI': { base: 800, trend: -0.5 },  // 钢铁
-  'ths_882501.TI': { base: 600, trend: 0 },     // 农林牧渔
-  'ths_c_ai.TI':   { base: 5000, trend: 6 },    // AI大模型 最强
-  'ths_c_robot.TI':{ base: 3500, trend: 5 },    // 人形机器人 强
-  'ths_c_huawei.TI':{ base: 2800, trend: 3 },   // 华为概念
-  'ths_c_lowalt.TI':{ base: 2200, trend: 2.5 }, // 低空经济
-  'ths_c_quantum.TI':{ base: 1800, trend: 4 },  // 量子计算
-  'ths_s_large.TI':{ base: 1500, trend: 1 },    // 大盘蓝筹
-  'ths_s_small.TI':{ base: 1200, trend: 2 },    // 中小成长
-  'ths_s_value.TI':{ base: 1400, trend: 0.5 },  // 价值
-  'ths_s_growth.TI':{ base: 1800, trend: 3 },   // 成长
+  // 金融
+  'ths_881155.TI': { base: 1380, trend: 2 },     // 银行 偏多
+  'ths_881157.TI': { base: 2850, trend: 3.5 },   // 证券 强势
+  'ths_881156.TI': { base: 1680, trend: 1.5 },   // 保险
+  'ths_881283.TI': { base: 1120, trend: 1 },     // 多元金融
+  // 科技/电子
+  'ths_881121.TI': { base: 3850, trend: 4.5 },   // 半导体 最强
+  'ths_881124.TI': { base: 2650, trend: 3.5 },   // 消费电子 强势
+  'ths_881122.TI': { base: 2180, trend: 3 },     // 光学光电子
+  'ths_881130.TI': { base: 1950, trend: 2.5 },   // 计算机设备
+  'ths_881272.TI': { base: 3200, trend: 4 },     // 软件开发 强势
+  'ths_881271.TI': { base: 2800, trend: 4 },     // IT服务 强势
+  'ths_881171.TI': { base: 2400, trend: 3.5 },   // 自动化设备 强势
+  // 新能源
+  'ths_881279.TI': { base: 1150, trend: -1 },    // 光伏设备 偏弱
+  'ths_881281.TI': { base: 1320, trend: 1 },     // 电池
+  'ths_881280.TI': { base: 980, trend: -0.5 },   // 风电设备 偏弱
+  'ths_881145.TI': { base: 1580, trend: 0.5 },   // 电力
+  'ths_881278.TI': { base: 1750, trend: 1.5 },   // 电网设备
+  // 医药
+  'ths_881144.TI': { base: 2100, trend: 0.5 },   // 医疗器械
+  'ths_881140.TI': { base: 1680, trend: -0.5 },  // 化学制药 偏弱
+  'ths_881142.TI': { base: 1920, trend: 1 },     // 生物制品
+  'ths_881175.TI': { base: 1450, trend: 0.5 },   // 医疗服务
+  // 消费
+  'ths_881273.TI': { base: 2380, trend: -0.5 },  // 白酒 偏弱
+  'ths_881133.TI': { base: 1280, trend: 0.5 },   // 饮料制造
+  'ths_881125.TI': { base: 1850, trend: 3 },     // 汽车整车 偏多
+  'ths_881126.TI': { base: 2150, trend: 4 },     // 汽车零部件 强势
+  'ths_881131.TI': { base: 1680, trend: 2 },     // 白色家电 偏多
+  // 军工
+  'ths_881166.TI': { base: 2580, trend: 2.5 },   // 军工装备 偏多
+  'ths_881276.TI': { base: 2250, trend: 3 },     // 军工电子 强势
+  // 有色/资源
+  'ths_881169.TI': { base: 2850, trend: 2 },     // 贵金属 偏多
+  'ths_881267.TI': { base: 1050, trend: -1 },    // 能源金属 偏弱
+  'ths_881112.TI': { base: 1180, trend: -0.5 },  // 钢铁 偏弱
+  // 通信
+  'ths_881129.TI': { base: 2150, trend: 2 },     // 通信设备 偏多
+  'ths_881162.TI': { base: 1380, trend: 1 },     // 通信服务
 };
 
 // 缓存板块日线数据
@@ -354,75 +871,114 @@ export function getSectorLatest(sectorId: string): SectorDaily | null {
 }
 
 // ─── 个股 Mock 数据 ────────────────────────────────────────────────────────────
+// 成分股与数据库 sector_stock_map + stock_meta 保持一致
 
-// 板块 → 成分股映射
 const SECTOR_STOCKS: Record<string, StockMeta[]> = {
-  'ths_881401.TI': [
-    { ts_code: '603501.SH', symbol: '603501', name_cn: '韦尔股份', area: '上海', industry: '半导体', market: 'SH', list_date: '20170508', is_active: true },
-    { ts_code: '002049.SZ', symbol: '002049', name_cn: '紫光国微', area: '北京', industry: '半导体', market: 'SZ', list_date: '20040105', is_active: true },
-    { ts_code: '688012.SH', symbol: '688012', name_cn: '中微公司', area: '上海', industry: '半导体', market: 'SH', list_date: '20190722', is_active: true },
-    { ts_code: '688981.SH', symbol: '688981', name_cn: '中芯国际', area: '上海', industry: '半导体', market: 'SH', list_date: '20200716', is_active: true },
-    { ts_code: '300782.SZ', symbol: '300782', name_cn: '卓胜微', area: '广东', industry: '半导体', market: 'SZ', list_date: '20190712', is_active: true },
-    { ts_code: '688256.SH', symbol: '688256', name_cn: '寒武纪', area: '北京', industry: '半导体', market: 'SH', list_date: '20200720', is_active: true },
+  // 集成电路制造（ths_884227.TI）
+  'ths_884227.TI': [
+    { ts_code: '688981.SH', symbol: '688981', name_cn: '中芯国际', area: '上海', industry: '半导体', market: '科创板', list_date: '20200716', is_active: true },
+    { ts_code: '688012.SH', symbol: '688012', name_cn: '中微公司', area: '上海', industry: '半导体', market: '科创板', list_date: '20190722', is_active: true },
+    { ts_code: '688396.SH', symbol: '688396', name_cn: '华润微', area: '北京', industry: '半导体', market: '科创板', list_date: '20210226', is_active: true },
+    { ts_code: '603501.SH', symbol: '603501', name_cn: '韦尔股份', area: '上海', industry: '半导体', market: '主板', list_date: '20170508', is_active: true },
+    { ts_code: '002049.SZ', symbol: '002049', name_cn: '紫光国微', area: '北京', industry: '半导体', market: '主板', list_date: '20040105', is_active: true },
   ],
-  'ths_881403.TI': [
-    { ts_code: '300059.SZ', symbol: '300059', name_cn: '东方财富', area: '上海', industry: '互联网', market: 'SZ', list_date: '20100301', is_active: true },
-    { ts_code: '002230.SZ', symbol: '002230', name_cn: '科大讯飞', area: '安徽', industry: 'AI', market: 'SZ', list_date: '20080201', is_active: true },
-    { ts_code: '688111.SH', symbol: '688111', name_cn: '金山办公', area: '北京', industry: '软件', market: 'SH', list_date: '20191118', is_active: true },
-    { ts_code: '300014.SZ', symbol: '300014', name_cn: '亿纬锂能', area: '广东', industry: '新能源', market: 'SZ', list_date: '20100101', is_active: true },
-    { ts_code: '688041.SH', symbol: '688041', name_cn: '海光信息', area: '天津', industry: '半导体', market: 'SH', list_date: '20220822', is_active: true },
+  // 数字芯片设计（ths_884287.TI）
+  'ths_884287.TI': [
+    { ts_code: '688041.SH', symbol: '688041', name_cn: '海光信息', area: '天津', industry: '半导体', market: '科创板', list_date: '20220822', is_active: true },
+    { ts_code: '688256.SH', symbol: '688256', name_cn: '寒武纪', area: '北京', industry: '半导体', market: '科创板', list_date: '20200720', is_active: true },
+    { ts_code: '300782.SZ', symbol: '300782', name_cn: '卓胜微', area: '广东', industry: '半导体', market: '创业板', list_date: '20190712', is_active: true },
+    { ts_code: '688236.SH', symbol: '688236', name_cn: '科威尔', area: '上海', industry: '半导体', market: '科创板', list_date: '20210218', is_active: true },
+    { ts_code: '688798.SH', symbol: '688798', name_cn: '艾为电子', area: '上海', industry: '半导体', market: '科创板', list_date: '20210623', is_active: true },
   ],
-  'ths_881402.TI': [
-    { ts_code: '002415.SZ', symbol: '002415', name_cn: '海康威视', area: '浙江', industry: '电子', market: 'SZ', list_date: '20100528', is_active: true },
-    { ts_code: '002241.SZ', symbol: '002241', name_cn: '歌尔股份', area: '山东', industry: '电子', market: 'SZ', list_date: '20080924', is_active: true },
-    { ts_code: '002475.SZ', symbol: '002475', name_cn: '立讯精密', area: '广东', industry: '电子', market: 'SZ', list_date: '20100910', is_active: true },
-    { ts_code: '603501.SH', symbol: '603501', name_cn: '韦尔股份', area: '上海', industry: '半导体', market: 'SH', list_date: '20170508', is_active: true },
-    { ts_code: '300433.SZ', symbol: '300433', name_cn: '蓝思科技', area: '湖南', industry: '电子', market: 'SZ', list_date: '20150318', is_active: true },
+  // 机器人（ths_884218.TI）
+  'ths_884218.TI': [
+    { ts_code: '300024.SZ', symbol: '300024', name_cn: '机器人', area: '辽宁', industry: '机械', market: '创业板', list_date: '20100114', is_active: true },
+    { ts_code: '002747.SZ', symbol: '002747', name_cn: '埃斯顿', area: '江苏', industry: '机械', market: '主板', list_date: '20150218', is_active: true },
+    { ts_code: '688169.SH', symbol: '688169', name_cn: '石头科技', area: '北京', industry: '家电', market: '科创板', list_date: '20200218', is_active: true },
+    { ts_code: '300496.SZ', symbol: '300496', name_cn: '中科创达', area: '北京', industry: '软件', market: '创业板', list_date: '20160629', is_active: true },
+    { ts_code: '688507.SH', symbol: '688507', name_cn: '索辰科技', area: '上海', industry: '软件', market: '科创板', list_date: '20220114', is_active: true },
   ],
-  'ths_881101.TI': [
-    { ts_code: '601398.SH', symbol: '601398', name_cn: '工商银行', area: '北京', industry: '银行', market: 'SH', list_date: '20061027', is_active: true },
-    { ts_code: '601288.SH', symbol: '601288', name_cn: '农业银行', area: '北京', industry: '银行', market: 'SH', list_date: '20100715', is_active: true },
-    { ts_code: '600036.SH', symbol: '600036', name_cn: '招商银行', area: '广东', industry: '银行', market: 'SH', list_date: '20020409', is_active: true },
-    { ts_code: '601166.SH', symbol: '601166', name_cn: '兴业银行', area: '福建', industry: '银行', market: 'SH', list_date: '20070201', is_active: true },
-    { ts_code: '600000.SH', symbol: '600000', name_cn: '浦发银行', area: '上海', industry: '银行', market: 'SH', list_date: '19991110', is_active: true },
+  // IT服务Ⅲ（ths_884274.TI）
+  'ths_884274.TI': [
+    { ts_code: '002230.SZ', symbol: '002230', name_cn: '科大讯飞', area: '安徽', industry: '软件', market: '主板', list_date: '20080201', is_active: true },
+    { ts_code: '688111.SH', symbol: '688111', name_cn: '金山办公', area: '北京', industry: '软件', market: '科创板', list_date: '20191118', is_active: true },
+    { ts_code: '300059.SZ', symbol: '300059', name_cn: '东方财富', area: '上海', industry: '互联网', market: '创业板', list_date: '20100301', is_active: true },
+    { ts_code: '688065.SH', symbol: '688065', name_cn: '凌雄科技', area: '广东', industry: '软件', market: '科创板', list_date: '20210617', is_active: true },
+    { ts_code: '688298.SH', symbol: '688298', name_cn: '东方国信', area: '北京', industry: '软件', market: '科创板', list_date: '20200916', is_active: true },
   ],
-  'ths_881103.TI': [
-    { ts_code: '600030.SH', symbol: '600030', name_cn: '中信证券', area: '北京', industry: '证券', market: 'SH', list_date: '20030106', is_active: true },
-    { ts_code: '601688.SH', symbol: '601688', name_cn: '华泰证券', area: '江苏', industry: '证券', market: 'SH', list_date: '20100209', is_active: true },
-    { ts_code: '000776.SZ', symbol: '000776', name_cn: '广发证券', area: '广东', industry: '证券', market: 'SZ', list_date: '20100830', is_active: true },
-    { ts_code: '601995.SH', symbol: '601995', name_cn: '中金公司', area: '北京', industry: '证券', market: 'SH', list_date: '20201102', is_active: true },
-    { ts_code: '600999.SH', symbol: '600999', name_cn: '招商证券', area: '广东', industry: '证券', market: 'SH', list_date: '20090923', is_active: true },
+  // 国有大型银行（ths_884249.TI）
+  'ths_884249.TI': [
+    { ts_code: '601398.SH', symbol: '601398', name_cn: '工商银行', area: '北京', industry: '银行', market: '主板', list_date: '20061027', is_active: true },
+    { ts_code: '601288.SH', symbol: '601288', name_cn: '农业银行', area: '北京', industry: '银行', market: '主板', list_date: '20100715', is_active: true },
+    { ts_code: '601988.SH', symbol: '601988', name_cn: '中国银行', area: '北京', industry: '银行', market: '主板', list_date: '20060705', is_active: true },
+    { ts_code: '601328.SH', symbol: '601328', name_cn: '交通银行', area: '上海', industry: '银行', market: '主板', list_date: '20070515', is_active: true },
+    { ts_code: '601939.SH', symbol: '601939', name_cn: '建设银行', area: '北京', industry: '银行', market: '主板', list_date: '20070925', is_active: true },
   ],
-  'ths_881701.TI': [
-    { ts_code: '600760.SH', symbol: '600760', name_cn: '中航沈飞', area: '辽宁', industry: '军工', market: 'SH', list_date: '19961015', is_active: true },
-    { ts_code: '002414.SZ', symbol: '002414', name_cn: '高德红外', area: '湖北', industry: '军工', market: 'SZ', list_date: '20100118', is_active: true },
-    { ts_code: '600893.SH', symbol: '600893', name_cn: '航发动力', area: '陕西', industry: '军工', market: 'SH', list_date: '19961016', is_active: true },
-    { ts_code: '002179.SZ', symbol: '002179', name_cn: '中航光电', area: '陕西', industry: '军工', market: 'SZ', list_date: '20080229', is_active: true },
-    { ts_code: '688596.SH', symbol: '688596', name_cn: '正帆科技', area: '上海', industry: '军工', market: 'SH', list_date: '20210423', is_active: true },
+  // 证券Ⅲ（ths_884205.TI）
+  'ths_884205.TI': [
+    { ts_code: '600030.SH', symbol: '600030', name_cn: '中信证券', area: '北京', industry: '证券', market: '主板', list_date: '20030106', is_active: true },
+    { ts_code: '601688.SH', symbol: '601688', name_cn: '华泰证券', area: '江苏', industry: '证券', market: '主板', list_date: '20100209', is_active: true },
+    { ts_code: '000776.SZ', symbol: '000776', name_cn: '广发证券', area: '广东', industry: '证券', market: '主板', list_date: '20100830', is_active: true },
+    { ts_code: '601995.SH', symbol: '601995', name_cn: '中金公司', area: '北京', industry: '证券', market: '主板', list_date: '20201102', is_active: true },
+    { ts_code: '600999.SH', symbol: '600999', name_cn: '招商证券', area: '广东', industry: '证券', market: '主板', list_date: '20090923', is_active: true },
   ],
-  'ths_c_ai.TI': [
-    { ts_code: '002230.SZ', symbol: '002230', name_cn: '科大讯飞', area: '安徽', industry: 'AI', market: 'SZ', list_date: '20080201', is_active: true },
-    { ts_code: '688111.SH', symbol: '688111', name_cn: '金山办公', area: '北京', industry: '软件', market: 'SH', list_date: '20191118', is_active: true },
-    { ts_code: '688041.SH', symbol: '688041', name_cn: '海光信息', area: '天津', industry: '半导体', market: 'SH', list_date: '20220822', is_active: true },
-    { ts_code: '300059.SZ', symbol: '300059', name_cn: '东方财富', area: '上海', industry: '互联网', market: 'SZ', list_date: '20100301', is_active: true },
-    { ts_code: '603605.SH', symbol: '603605', name_cn: '珀莱雅', area: '浙江', industry: '消费', market: 'SH', list_date: '20170228', is_active: true },
+  // 光伏电池组件（ths_884303.TI）
+  'ths_884303.TI': [
+    { ts_code: '601012.SH', symbol: '601012', name_cn: '隆基绿能', area: '陕西', industry: '光伏', market: '主板', list_date: '20120811', is_active: true },
+    { ts_code: '688599.SH', symbol: '688599', name_cn: '天合光能', area: '江苏', industry: '光伏', market: '科创板', list_date: '20200610', is_active: true },
+    { ts_code: '002459.SZ', symbol: '002459', name_cn: '晶澳科技', area: '河北', industry: '光伏', market: '主板', list_date: '20090901', is_active: true },
+    { ts_code: '300274.SZ', symbol: '300274', name_cn: '阳光电源', area: '安徽', industry: '光伏', market: '创业板', list_date: '20111102', is_active: true },
+    { ts_code: '600438.SH', symbol: '600438', name_cn: '通威股份', area: '四川', industry: '光伏', market: '主板', list_date: '20040309', is_active: true },
   ],
-  'ths_c_robot.TI': [
-    { ts_code: '300024.SZ', symbol: '300024', name_cn: '机器人', area: '辽宁', industry: '机械', market: 'SZ', list_date: '20100114', is_active: true },
-    { ts_code: '688169.SH', symbol: '688169', name_cn: '石头科技', area: '北京', industry: '家电', market: 'SH', list_date: '20200218', is_active: true },
-    { ts_code: '300496.SZ', symbol: '300496', name_cn: '中科创达', area: '北京', industry: '软件', market: 'SZ', list_date: '20160629', is_active: true },
-    { ts_code: '002747.SZ', symbol: '002747', name_cn: '埃斯顿', area: '江苏', industry: '机械', market: 'SZ', list_date: '20150218', is_active: true },
-    { ts_code: '688007.SH', symbol: '688007', name_cn: '光峰科技', area: '广东', industry: '电子', market: 'SH', list_date: '20190822', is_active: true },
+  // 锂电池（ths_884309.TI）
+  'ths_884309.TI': [
+    { ts_code: '300750.SZ', symbol: '300750', name_cn: '宁德时代', area: '福建', industry: '锂电池', market: '创业板', list_date: '20180611', is_active: true },
+    { ts_code: '300014.SZ', symbol: '300014', name_cn: '亿纬锂能', area: '广东', industry: '锂电池', market: '创业板', list_date: '20100101', is_active: true },
+    { ts_code: '688063.SH', symbol: '688063', name_cn: '派能科技', area: '上海', industry: '锂电池', market: '科创板', list_date: '20200917', is_active: true },
+    { ts_code: '600110.SH', symbol: '600110', name_cn: '诺德股份', area: '山东', industry: '锂电池', market: '主板', list_date: '20030814', is_active: true },
+    { ts_code: '301121.SZ', symbol: '301121', name_cn: '紫建电子', area: '广东', industry: '锂电池', market: '创业板', list_date: '20220225', is_active: true },
+  ],
+  // 医疗设备（ths_884145.TI）
+  'ths_884145.TI': [
+    { ts_code: '300760.SZ', symbol: '300760', name_cn: '迈瑞医疗', area: '广东', industry: '医疗器械', market: '创业板', list_date: '20181016', is_active: true },
+    { ts_code: '688212.SH', symbol: '688212', name_cn: '澳华内镜', area: '上海', industry: '医疗器械', market: '科创板', list_date: '20211029', is_active: true },
+    { ts_code: '688301.SH', symbol: '688301', name_cn: '奕瑞科技', area: '上海', industry: '医疗器械', market: '科创板', list_date: '20210916', is_active: true },
+    { ts_code: '300869.SZ', symbol: '300869', name_cn: '康泰医学', area: '河北', industry: '医疗器械', market: '创业板', list_date: '20200925', is_active: true },
+    { ts_code: '688607.SH', symbol: '688607', name_cn: '康众医疗', area: '上海', industry: '医疗器械', market: '科创板', list_date: '20220119', is_active: true },
+  ],
+  // 白酒Ⅲ（ths_884188.TI）
+  'ths_884188.TI': [
+    { ts_code: '600519.SH', symbol: '600519', name_cn: '贵州茅台', area: '贵州', industry: '白酒', market: '主板', list_date: '20010827', is_active: true },
+    { ts_code: '000858.SZ', symbol: '000858', name_cn: '五粮液', area: '四川', industry: '白酒', market: '主板', list_date: '19980427', is_active: true },
+    { ts_code: '000596.SZ', symbol: '000596', name_cn: '古井贡酒', area: '安徽', industry: '白酒', market: '主板', list_date: '19960910', is_active: true },
+    { ts_code: '600809.SH', symbol: '600809', name_cn: '山西汾酒', area: '山西', industry: '白酒', market: '主板', list_date: '19940101', is_active: true },
+    { ts_code: '002304.SZ', symbol: '002304', name_cn: '洋河股份', area: '江苏', industry: '白酒', market: '主板', list_date: '20091117', is_active: true },
+  ],
+  // 航天装备（ths_884180.TI）
+  'ths_884180.TI': [
+    { ts_code: '600760.SH', symbol: '600760', name_cn: '中航沈飞', area: '辽宁', industry: '军工', market: '主板', list_date: '19961015', is_active: true },
+    { ts_code: '600893.SH', symbol: '600893', name_cn: '航发动力', area: '陕西', industry: '军工', market: '主板', list_date: '19961016', is_active: true },
+    { ts_code: '002414.SZ', symbol: '002414', name_cn: '高德红外', area: '湖北', industry: '军工', market: '主板', list_date: '20100118', is_active: true },
+    { ts_code: '002179.SZ', symbol: '002179', name_cn: '中航光电', area: '陕西', industry: '军工', market: '主板', list_date: '20080229', is_active: true },
+    { ts_code: '688596.SH', symbol: '688596', name_cn: '正帆科技', area: '上海', industry: '军工', market: '科创板', list_date: '20210423', is_active: true },
+  ],
+  // 贵金属Ⅲ（ths_884185.TI）
+  'ths_884185.TI': [
+    { ts_code: '600547.SH', symbol: '600547', name_cn: '山东黄金', area: '山东', industry: '黄金', market: '主板', list_date: '20030818', is_active: true },
+    { ts_code: '601899.SH', symbol: '601899', name_cn: '紫金矿业', area: '福建', industry: '黄金', market: '主板', list_date: '20080425', is_active: true },
+    { ts_code: '600489.SH', symbol: '600489', name_cn: '中金黄金', area: '北京', industry: '黄金', market: '主板', list_date: '20030801', is_active: true },
+    { ts_code: '002155.SZ', symbol: '002155', name_cn: '湖南黄金', area: '湖南', industry: '黄金', market: '主板', list_date: '20080118', is_active: true },
+    { ts_code: '000975.SZ', symbol: '000975', name_cn: '银泰黄金', area: '云南', industry: '黄金', market: '主板', list_date: '19960301', is_active: true },
   ],
 };
 
 // 默认成分股（未配置的板块）
 const DEFAULT_STOCKS: StockMeta[] = [
-  { ts_code: '000001.SZ', symbol: '000001', name_cn: '平安银行', area: '广东', industry: '银行', market: 'SZ', list_date: '19910403', is_active: true },
-  { ts_code: '000002.SZ', symbol: '000002', name_cn: '万科A', area: '广东', industry: '房地产', market: 'SZ', list_date: '19910129', is_active: true },
-  { ts_code: '600519.SH', symbol: '600519', name_cn: '贵州茅台', area: '贵州', industry: '白酒', market: 'SH', list_date: '20010827', is_active: true },
-  { ts_code: '601318.SH', symbol: '601318', name_cn: '中国平安', area: '广东', industry: '保险', market: 'SH', list_date: '20070301', is_active: true },
-  { ts_code: '000858.SZ', symbol: '000858', name_cn: '五粮液', area: '四川', industry: '白酒', market: 'SZ', list_date: '19980427', is_active: true },
+  { ts_code: '000001.SZ', symbol: '000001', name_cn: '平安银行', area: '广东', industry: '银行', market: '主板', list_date: '19910403', is_active: true },
+  { ts_code: '000002.SZ', symbol: '000002', name_cn: '万科A', area: '广东', industry: '房地产', market: '主板', list_date: '19910129', is_active: true },
+  { ts_code: '600519.SH', symbol: '600519', name_cn: '贵州茅台', area: '贵州', industry: '白酒', market: '主板', list_date: '20010827', is_active: true },
+  { ts_code: '601318.SH', symbol: '601318', name_cn: '中国平安', area: '广东', industry: '保险', market: '主板', list_date: '20070301', is_active: true },
+  { ts_code: '000858.SZ', symbol: '000858', name_cn: '五粮液', area: '四川', industry: '白酒', market: '主板', list_date: '19980427', is_active: true },
 ];
 
 export function getSectorStocks(sectorId: string): StockMeta[] {
@@ -431,46 +987,42 @@ export function getSectorStocks(sectorId: string): StockMeta[] {
 
 // 股票基础价格（用于生成 K 线数据）
 const STOCK_BASE_PRICES: Record<string, number> = {
-  '603501.SH': 85.2,
-  '002049.SZ': 42.8,
-  '688012.SH': 68.5,
-  '688981.SH': 52.3,
-  '300782.SZ': 78.9,
-  '688256.SH': 145.6,
-  '300059.SZ': 18.5,
-  '002230.SZ': 32.4,
-  '688111.SH': 225.8,
-  '300014.SZ': 28.6,
-  '688041.SH': 98.5,
-  '002415.SZ': 32.8,
-  '002241.SZ': 15.6,
-  '002475.SZ': 38.9,
-  '300433.SZ': 22.5,
-  '601398.SH': 5.82,
-  '601288.SH': 4.25,
-  '600036.SH': 38.5,
-  '601166.SH': 18.2,
-  '600000.SH': 9.85,
-  '600030.SH': 22.8,
-  '601688.SH': 15.6,
-  '000776.SZ': 18.2,
-  '601995.SH': 42.5,
-  '600999.SH': 14.8,
-  '600760.SH': 68.5,
-  '002414.SZ': 35.6,
-  '600893.SH': 28.9,
-  '002179.SZ': 45.2,
-  '688596.SH': 22.5,
-  '300024.SZ': 18.5,
-  '688169.SH': 285.6,
-  '300496.SZ': 65.8,
-  '002747.SZ': 28.5,
-  '688007.SH': 12.5,
-  '000001.SZ': 12.5,
-  '000002.SZ': 8.2,
-  '600519.SH': 1685.0,
-  '601318.SH': 45.8,
-  '000858.SZ': 128.5,
+  // 集成电路制造
+  '688981.SH': 52.3,  '688012.SH': 68.5,  '688396.SH': 38.2,
+  '603501.SH': 85.2,  '002049.SZ': 42.8,
+  // 数字芯片设计
+  '688041.SH': 98.5,  '688256.SH': 145.6, '300782.SZ': 78.9,
+  '688236.SH': 55.2,  '688798.SH': 62.8,
+  // 机器人
+  '300024.SZ': 18.5,  '002747.SZ': 28.5,  '688169.SH': 285.6,
+  '300496.SZ': 65.8,  '688507.SH': 45.2,
+  // IT服务
+  '002230.SZ': 32.4,  '688111.SH': 225.8, '300059.SZ': 18.5,
+  '688065.SH': 28.6,  '688298.SH': 35.2,
+  // 国有大型银行
+  '601398.SH': 5.82,  '601288.SH': 4.25,  '601988.SH': 4.65,
+  '601328.SH': 6.85,  '601939.SH': 7.52,
+  // 证券
+  '600030.SH': 22.8,  '601688.SH': 15.6,  '000776.SZ': 18.2,
+  '601995.SH': 42.5,  '600999.SH': 14.8,
+  // 光伏
+  '601012.SH': 12.8,  '688599.SH': 8.5,   '002459.SZ': 9.2,
+  '300274.SZ': 42.5,  '600438.SH': 15.6,
+  // 锂电池
+  '300750.SZ': 225.8, '300014.SZ': 28.6,  '688063.SH': 65.2,
+  '600110.SH': 8.5,   '301121.SZ': 18.2,
+  // 医疗设备
+  '300760.SZ': 285.6, '688212.SH': 45.2,  '688301.SH': 88.5,
+  '300869.SZ': 22.8,  '688607.SH': 35.6,
+  // 白酒
+  '600519.SH': 1685.0,'000858.SZ': 128.5, '000596.SZ': 165.2,
+  '600809.SH': 258.6, '002304.SZ': 88.5,
+  // 军工
+  '600760.SH': 68.5,  '600893.SH': 28.9,  '002414.SZ': 35.6,
+  '002179.SZ': 45.2,  '688596.SH': 22.5,
+  // 贵金属
+  '600547.SH': 28.5,  '601899.SH': 15.8,  '600489.SH': 22.5,
+  '002155.SZ': 18.6,  '000975.SZ': 12.5,
 };
 
 export function getStockBasePrice(tsCode: string): number {
@@ -530,12 +1082,22 @@ export function genStockKline(
   return result;
 }
 
-// 生成个股画像（综合 stock_daily + stock_daily_basic）
+// 生成个股画像（综合 stock_daily + stock_daily_basic + stock_moneyflow）
 export function genStockProfile(stock: StockMeta) {
   const base = getStockBasePrice(stock.ts_code);
   const pct = (Math.random() - 0.48) * 6;
   const close = parseFloat((base * (1 + pct / 100)).toFixed(2));
+  const totalMv = parseFloat((close * (5e7 + Math.random() * 5e9) / 1e8).toFixed(1));
+
+  // stock_moneyflow 格式
+  const netAmount = parseFloat(((Math.random() - 0.45) * 5000).toFixed(2));
+  const buyElgAmount = parseFloat((Math.random() * 3000).toFixed(2));
+  const buyLgAmount = parseFloat((Math.random() * 8000).toFixed(2));
+  const buyMdAmount = parseFloat((Math.random() * 3000).toFixed(2));
+  const buySmAmount = parseFloat((Math.random() * 1500).toFixed(2));
+
   return {
+    // stock_daily / stock_daily_basic 字段
     ts_code: stock.ts_code,
     name_cn: stock.name_cn,
     close_today: close,
@@ -543,424 +1105,154 @@ export function genStockProfile(stock: StockMeta) {
     pe_ttm: parseFloat((15 + Math.random() * 25).toFixed(1)),
     pb: parseFloat((1.5 + Math.random() * 4).toFixed(2)),
     ps_ttm: parseFloat((2 + Math.random() * 5).toFixed(2)),
+    dv_ratio: parseFloat((0.5 + Math.random() * 3).toFixed(2)),
     turnover_rate: parseFloat((0.5 + Math.random() * 5).toFixed(2)),
     volume_ratio: parseFloat((0.8 + Math.random() * 2).toFixed(2)),
-    total_mv: parseFloat((close * (5e7 + Math.random() * 5e9) / 1e8).toFixed(1)),
-    circ_mv: parseFloat((close * (3e7 + Math.random() * 3e9) / 1e8).toFixed(1)),
+    total_mv: totalMv,
+    circ_mv: parseFloat((totalMv * (0.6 + Math.random() * 0.3)).toFixed(1)),
     high_52w: parseFloat((base * (1.2 + Math.random() * 0.3)).toFixed(2)),
     low_52w: parseFloat((base * (0.6 + Math.random() * 0.2)).toFixed(2)),
-    // 资金流向（模拟 moneyflow 格式）
-    net_mf_amount: parseFloat(((Math.random() - 0.45) * 5000).toFixed(2)), // 万元
-    buy_lg_amount: parseFloat((Math.random() * 8000).toFixed(2)),
-    sell_lg_amount: parseFloat((Math.random() * 6000).toFixed(2)),
-    buy_md_amount: parseFloat((Math.random() * 3000).toFixed(2)),
-    sell_md_amount: parseFloat((Math.random() * 2500).toFixed(2)),
-    buy_sm_amount: parseFloat((Math.random() * 1500).toFixed(2)),
-    sell_sm_amount: parseFloat((Math.random() * 1200).toFixed(2)),
+    // stock_moneyflow 字段
+    net_amount: netAmount,
+    buy_elg_amount: buyElgAmount,
+    buy_lg_amount: buyLgAmount,
+    buy_md_amount: buyMdAmount,
+    buy_sm_amount: buySmAmount,
+    // 卖出 = 买入 - 净流入（简化计算）
+    sell_elg_amount: parseFloat((buyElgAmount - netAmount * 0.3).toFixed(2)),
+    sell_lg_amount: parseFloat((buyLgAmount - netAmount * 0.5).toFixed(2)),
+    sell_md_amount: parseFloat((buyMdAmount - netAmount * 0.1).toFixed(2)),
+    sell_sm_amount: parseFloat((buySmAmount - netAmount * 0.1).toFixed(2)),
   };
 }
 
-// ─── 宏观状态矩阵类型定义 ─────────────────────────────────────────────────────
+// 生成个股财务数据（stock_fina_indicator + stock_income + stock_balance 格式）
+export function genStockFina(tsCode: string): {
+  fina: StockFinaIndicator;
+  income: StockIncome;
+  balance: StockBalance;
+} {
+  const base = getStockBasePrice(tsCode);
+  const totalAssets = parseFloat((base * (1e8 + Math.random() * 1e10) / 1e8 * 2).toFixed(2));
+  const totalLiab = parseFloat((totalAssets * (0.3 + Math.random() * 0.4)).toFixed(2));
+  const equity = totalAssets - totalLiab;
+  const revenue = parseFloat((totalAssets * (0.3 + Math.random() * 0.5)).toFixed(2));
+  const grossProfit = parseFloat((revenue * (0.2 + Math.random() * 0.4)).toFixed(2));
+  const netProfit = parseFloat((grossProfit * (0.3 + Math.random() * 0.5)).toFixed(2));
+  const eps = parseFloat((netProfit / (1e8 + Math.random() * 1e9) * 1e8).toFixed(4));
+  const bps = parseFloat((equity / (1e8 + Math.random() * 1e9) * 1e8).toFixed(4));
 
-export type MatrixRegion = 'CN' | 'US';
-
-export interface MatrixCell {
-  status: string;           // 状态标签（如"扩张"、"宽松"）
-  score: number;            // 综合评分 0-100
-  trend: 'up' | 'down' | 'flat';
-  desc: string;             // 详细描述
-  indicators: string[];     // 关联的 indicator_id 列表
-  data_quality: 'live' | 'mock' | 'warn';
-}
-
-export interface MacroMatrixRow {
-  dimension: string;        // 维度名称
-  a_stock_corr: '正相关' | '负相关' | '弱相关';
-  short: MatrixCell;        // 短期（3-9个月）
-  mid: MatrixCell;          // 中期（2-3年）
-  long: MatrixCell;         // 长期（5-10年）
-}
-
-export interface MacroMatrix {
-  region: MatrixRegion;
-  snapshot_date: string;       // 快照日期（YYYYMM，对应 indicator_values.trade_date）
-  model_version: string;
-  rows: MacroMatrixRow[];
-  summary: {                   // 综合评估行
-    short: MatrixCell;
-    mid: MatrixCell;
-    long: MatrixCell;
+  return {
+    fina: {
+      ts_code: tsCode,
+      ann_date: '20260228',
+      end_date: '20251231',
+      eps,
+      bps,
+      roe: parseFloat((netProfit / equity * 100).toFixed(2)),
+      roa: parseFloat((netProfit / totalAssets * 100).toFixed(2)),
+      grossprofit_margin: parseFloat((grossProfit / revenue * 100).toFixed(2)),
+      netprofit_margin: parseFloat((netProfit / revenue * 100).toFixed(2)),
+      debt_to_assets: parseFloat((totalLiab / totalAssets * 100).toFixed(2)),
+      current_ratio: parseFloat((1.2 + Math.random() * 2).toFixed(2)),
+      quick_ratio: parseFloat((0.8 + Math.random() * 1.5).toFixed(2)),
+      basic_eps_yoy: parseFloat(((Math.random() - 0.3) * 60).toFixed(2)),
+      netprofit_yoy: parseFloat(((Math.random() - 0.3) * 60).toFixed(2)),
+      or_yoy: parseFloat(((Math.random() - 0.2) * 40).toFixed(2)),
+    },
+    income: {
+      ts_code: tsCode,
+      ann_date: '20260228',
+      end_date: '20251231',
+      total_revenue: revenue,
+      revenue,
+      operate_profit: parseFloat((grossProfit * 0.8).toFixed(2)),
+      total_profit: parseFloat((grossProfit * 0.75).toFixed(2)),
+      n_income: netProfit,
+      n_income_attr_p: parseFloat((netProfit * (0.85 + Math.random() * 0.15)).toFixed(2)),
+      basic_eps: eps,
+      ebit: parseFloat((grossProfit * 0.85).toFixed(2)),
+      ebitda: parseFloat((grossProfit * 1.1).toFixed(2)),
+      rd_exp: parseFloat((revenue * (0.03 + Math.random() * 0.1)).toFixed(2)),
+    },
+    balance: {
+      ts_code: tsCode,
+      ann_date: '20260228',
+      end_date: '20251231',
+      total_assets: totalAssets,
+      total_liab: totalLiab,
+      total_hldr_eqy_exc_min_int: equity,
+      money_cap: parseFloat((totalAssets * (0.1 + Math.random() * 0.2)).toFixed(2)),
+      accounts_receiv: parseFloat((revenue * (0.1 + Math.random() * 0.2)).toFixed(2)),
+      inventories: parseFloat((revenue * (0.05 + Math.random() * 0.15)).toFixed(2)),
+      lt_borr: parseFloat((totalLiab * (0.2 + Math.random() * 0.3)).toFixed(2)),
+      st_borr: parseFloat((totalLiab * (0.1 + Math.random() * 0.2)).toFixed(2)),
+    },
   };
 }
 
-// 中国宏观状态矩阵（CN）
-export const MACRO_MATRIX_CN: MacroMatrix = {
-  region: 'CN',
-  snapshot_date: '202603',
-  model_version: 'v1',
-  rows: [
-    // ── 维度1：经济周期位置 ──────────────────────────────────────────────────
-    // 数据来源：pmi_mfg, pmi_non_mfg, gdp_yoy, gdp_qoq, industrial_yoy,
-    //           retail_yoy, fai_yoy, export_yoy, import_yoy, unemployment_rate
-    {
-      dimension: '经济周期位置',
-      a_stock_corr: '正相关',
-      short: {
-        status: '扩张',
-        score: 80,
-        trend: 'up',
-        desc: 'PMI连续2月回升至50.2，工业增加值同比+5.8%，GDP同比5.1%，零售同比+4.2%，经济动能温和扩张',
-        indicators: ['pmi_mfg', 'pmi_non_mfg', 'gdp_yoy', 'industrial_yoy', 'retail_yoy'],
-        data_quality: 'mock',
-      },
-      mid: {
-        status: '复苏',
-        score: 62,
-        trend: 'up',
-        desc: '内需修复节奏偏慢，出口同比-2.1%受外部压制，固投同比+3.5%，中期复苏路径存不确定性',
-        indicators: ['gdp_yoy', 'gdp_qoq', 'fai_yoy', 'export_yoy', 'import_yoy', 'unemployment_rate'],
-        data_quality: 'mock',
-      },
-      long: {
-        status: '中性',
-        score: 50,
-        trend: 'flat',
-        desc: '人口结构老龄化、债务周期高位等长期因素制约潜在增速，长期中性判断',
-        indicators: ['gdp_yoy', 'gdp_per_capita', 'unemployment_rate'],
-        data_quality: 'mock',
-      },
-    },
-    // ── 维度2：货币政策信号 ──────────────────────────────────────────────────
-    // 数据来源：lpr_1y, lpr_5y, dr007, dr001, shibor_on, shibor_1w,
-    //           bond_10y, bond_10y_real
-    {
-      dimension: '货币政策信号',
-      a_stock_corr: '正相关',
-      short: {
-        status: '宽松',
-        score: 75,
-        trend: 'up',
-        desc: 'LPR 1Y=3.1%（历史低位），DR007=1.8%，债券10年期=2.3%，货币政策明确宽松取向',
-        indicators: ['lpr_1y', 'lpr_5y', 'dr007', 'dr001', 'shibor_on', 'shibor_1w', 'bond_10y'],
-        data_quality: 'mock',
-      },
-      mid: {
-        status: '适度宽松',
-        score: 68,
-        trend: 'flat',
-        desc: '实际利率bond_10y_real=0.8%，汇率约束（rmb_usd=7.25）限制进一步宽松幅度',
-        indicators: ['bond_10y', 'bond_10y_real', 'rmb_usd', 'lpr_1y'],
-        data_quality: 'mock',
-      },
-      long: {
-        status: '中性',
-        score: 55,
-        trend: 'flat',
-        desc: '利率中枢长期下行趋势确立，但债务扩张空间收窄，长期中性',
-        indicators: ['bond_10y', 'bond_10y_real', 'lpr_1y'],
-        data_quality: 'mock',
-      },
-    },
-    // ── 维度3：政策底确认 ────────────────────────────────────────────────────
-    // 数据来源：social_finance, social_finance_yoy, new_loans, m2_yoy
-    //           （政策新闻/监管动向暂无结构化数据，接库后接 news/announcement）
-    {
-      dimension: '政策底确认',
-      a_stock_corr: '正相关',
-      short: {
-        status: '温和宽松',
-        score: 70,
-        trend: 'up',
-        desc: '社融增量同比多增1.2万亿，新增贷款1.5万亿，财政赤字率提升至4%，专项债加速发行',
-        indicators: ['social_finance', 'social_finance_yoy', 'new_loans', 'm2_yoy'],
-        data_quality: 'mock',
-      },
-      mid: {
-        status: '强刺激',
-        score: 78,
-        trend: 'up',
-        desc: '政策组合拳力度超预期（货币+财政+地产），科技+消费双轮驱动，市场预期明显改善',
-        indicators: ['social_finance_yoy', 'm2_yoy', 'new_loans'],
-        data_quality: 'mock',
-      },
-      long: {
-        status: '中性',
-        score: 52,
-        trend: 'flat',
-        desc: '结构性改革持续推进，但外部环境不确定性和债务约束限制长期政策空间',
-        indicators: ['social_finance_yoy', 'm2_yoy'],
-        data_quality: 'mock',
-      },
-    },
-    // ── 维度4：流动性环境 ────────────────────────────────────────────────────
-    // 数据来源：m2_yoy, m2_level, social_finance_yoy, north_net_flow,
-    //           north_daily_turnover, north_turnover_ratio_daily,
-    //           sh_market_turnover, sz_market_turnover, total_market_turnover,
-    //           margin_balance_sh, margin_balance_sz
-    {
-      dimension: '流动性环境',
-      a_stock_corr: '正相关',
-      short: {
-        status: '充裕',
-        score: 72,
-        trend: 'up',
-        desc: 'M2同比7.5%，全A日成交额1.2万亿，北向净流入+85亿，融资余额1.85万亿，资金面活跃',
-        indicators: ['m2_yoy', 'total_market_turnover', 'north_net_flow', 'north_daily_turnover', 'margin_balance_sh', 'margin_balance_sz'],
-        data_quality: 'mock',
-      },
-      mid: {
-        status: '适度充裕',
-        score: 65,
-        trend: 'flat',
-        desc: '社融存量同比8.2%，北向成交占比6.8%，中期流动性适度充裕，支撑市场运行',
-        indicators: ['social_financing_yoy', 'north_daily_turnover', 'm2_yoy'],
-        data_quality: 'mock',
-      },
-      long: {
-        status: '中性',
-        score: 55,
-        trend: 'flat',
-        desc: '人民币国际化推进，但资本账户管制限制外资长期流入规模，长期中性',
-        indicators: ['m2_yoy', 'rmb_usd', 'north_daily_turnover'],
-        data_quality: 'mock',
-      },
-    },
-    // ── 维度5：外部环境 ──────────────────────────────────────────────────────
-    // 数据来源：rmb_usd, trade_balance, export_yoy, import_yoy
-    //           （美联储政策/地缘政治暂无结构化数据，接库后接 global 指标）
-    {
-      dimension: '外部环境',
-      a_stock_corr: '正相关',
-      short: {
-        status: '中性偏压',
-        score: 45,
-        trend: 'down',
-        desc: '人民币兑美元7.25，贸易顺差收窄，关税摩擦升温，外部冲击处于可控但偏压状态',
-        indicators: ['rmb_usd', 'trade_balance', 'export_yoy', 'import_yoy'],
-        data_quality: 'mock',
-      },
-      mid: {
-        status: '中性',
-        score: 50,
-        trend: 'flat',
-        desc: '贸易多元化布局推进，东南亚出口替代效应显现，中期外部压力边际缓解',
-        indicators: ['trade_balance', 'export_yoy', 'import_yoy', 'rmb_usd'],
-        data_quality: 'mock',
-      },
-      long: {
-        status: '中性',
-        score: 48,
-        trend: 'flat',
-        desc: '全球化格局重塑，中国在全球供应链中的地位调整是长期变量，中性判断',
-        indicators: ['trade_balance', 'export_yoy', 'rmb_usd'],
-        data_quality: 'mock',
-      },
-    },
-  ],
-  summary: {
-    short: {
-      status: '复苏',
-      score: 70,
-      trend: 'up',
-      desc: '短期宏观环境偏多，经济扩张+流动性宽松+政策发力，建议积极配置',
-      indicators: [],
-      data_quality: 'mock',
-    },
-    mid: {
-      status: '复苏',
-      score: 68,
-      trend: 'up',
-      desc: '中期复苏路径确立，但节奏存在不确定性，建议均衡配置',
-      indicators: [],
-      data_quality: 'mock',
-    },
-    long: {
-      status: '中性',
-      score: 57,
-      trend: 'flat',
-      desc: '长期结构性机会存在，但整体中性，建议精选赛道',
-      indicators: [],
-      data_quality: 'mock',
-    },
-  },
-};
+// 生成个股公告数据（stock_announcement 格式）
+export function genStockAnnouncements(tsCode: string, namePrefix: string): StockAnnouncement[] {
+  const types = [
+    { ann_type: 'annual', title: `${namePrefix}关于2025年度业绩预告的公告` },
+    { ann_type: 'quarter', title: `${namePrefix}2025年第四季度报告` },
+    { ann_type: 'other', title: `${namePrefix}关于签署重大合同的公告` },
+    { ann_type: 'other', title: `${namePrefix}关于股东增持计划进展的公告` },
+    { ann_type: 'semi', title: `${namePrefix}2025年半年度报告` },
+    { ann_type: 'other', title: `${namePrefix}关于参加投资者关系活动的公告` },
+  ];
 
-// 美国宏观状态矩阵（US）— 同样使用 5 维度框架
-export const MACRO_MATRIX_US: MacroMatrix = {
-  region: 'US',
-  snapshot_date: '202603',
-  model_version: 'v1',
-  rows: [
-    // ── 维度1：经济周期位置 ──────────────────────────────────────────────────
-    {
-      dimension: '经济周期位置',
-      a_stock_corr: '弱相关',
-      short: {
-        status: '放缓',
-        score: 42,
-        trend: 'down',
-        desc: 'GDP增速放缓至1.8%，制造业PMI收缩至47.8，非农就业增速下滑，软着陆预期动摇',
-        indicators: [],
-        data_quality: 'mock',
-      },
-      mid: {
-        status: '收缩',
-        score: 35,
-        trend: 'down',
-        desc: '高利率滞后效应显现，信贷收紧，消费支出放缓，衰退风险上升至35%',
-        indicators: [],
-        data_quality: 'mock',
-      },
-      long: {
-        status: '中性',
-        score: 55,
-        trend: 'flat',
-        desc: '美国经济韧性长期存在，AI产业革命提供新动能，长期潜在增速约2%',
-        indicators: [],
-        data_quality: 'mock',
-      },
-    },
-    // ── 维度2：货币政策信号 ──────────────────────────────────────────────────
-    {
-      dimension: '货币政策信号',
-      a_stock_corr: '负相关',
-      short: {
-        status: '偏紧',
-        score: 35,
-        trend: 'up',
-        desc: '联邦基金利率5.25-5.5%维持高位，但降息预期升温（CME FedWatch降息概率65%），流动性边际改善',
-        indicators: [],
-        data_quality: 'mock',
-      },
-      mid: {
-        status: '适度宽松',
-        score: 60,
-        trend: 'up',
-        desc: '降息周期预计2025年开启，中期利率下行对风险资产有利，美债收益率曲线趋于正常化',
-        indicators: [],
-        data_quality: 'mock',
-      },
-      long: {
-        status: '中性',
-        score: 50,
-        trend: 'flat',
-        desc: '利率中枢高于疫情前（2-3% vs 0-0.25%），流动性长期中性，QT持续缩表',
-        indicators: [],
-        data_quality: 'mock',
-      },
-    },
-    // ── 维度3：政策底确认 ────────────────────────────────────────────────────
-    {
-      dimension: '政策底确认',
-      a_stock_corr: '弱相关',
-      short: {
-        status: '中性偏松',
-        score: 55,
-        trend: 'flat',
-        desc: '财政刺激有限（赤字率6.5%），大选年政策不确定性上升，IRA/芯片法案持续落地',
-        indicators: [],
-        data_quality: 'mock',
-      },
-      mid: {
-        status: '中性',
-        score: 48,
-        trend: 'flat',
-        desc: '两党政策分歧加大，监管不确定性制约投资，AI/清洁能源政策存在分歧',
-        indicators: [],
-        data_quality: 'mock',
-      },
-      long: {
-        status: '中性',
-        score: 52,
-        trend: 'flat',
-        desc: '美国政策周期性强，产业政策（芯片/AI）长期支撑科技创新，但财政可持续性存疑',
-        indicators: [],
-        data_quality: 'mock',
-      },
-    },
-    // ── 维度4：流动性环境 ────────────────────────────────────────────────────
-    {
-      dimension: '流动性环境',
-      a_stock_corr: '负相关',
-      short: {
-        status: '偏紧',
-        score: 38,
-        trend: 'up',
-        desc: 'M2同比-1.2%，银行信贷标准收紧，但货币市场基金规模创历史新高（6.2万亿美元）',
-        indicators: [],
-        data_quality: 'mock',
-      },
-      mid: {
-        status: '改善',
-        score: 58,
-        trend: 'up',
-        desc: '降息周期开启后货币市场资金将回流风险资产，中期流动性改善预期明确',
-        indicators: [],
-        data_quality: 'mock',
-      },
-      long: {
-        status: '中性',
-        score: 50,
-        trend: 'flat',
-        desc: '美元储备货币地位长期稳定，但去美元化趋势缓慢推进，长期流动性中性',
-        indicators: [],
-        data_quality: 'mock',
-      },
-    },
-    // ── 维度5：外部环境 ──────────────────────────────────────────────────────
-    {
-      dimension: '外部环境',
-      a_stock_corr: '弱相关',
-      short: {
-        status: '偏压',
-        score: 38,
-        trend: 'down',
-        desc: '地缘政治风险（中东/乌克兰）持续，关税政策不确定性，美元指数高位（DXY=104）',
-        indicators: [],
-        data_quality: 'mock',
-      },
-      mid: {
-        status: '中性',
-        score: 50,
-        trend: 'flat',
-        desc: '盟友体系重构推进，供应链回流政策持续，中期外部环境趋于稳定',
-        indicators: [],
-        data_quality: 'mock',
-      },
-      long: {
-        status: '中性偏强',
-        score: 58,
-        trend: 'flat',
-        desc: '美国主导的全球秩序重塑，科技+军事优势长期维持，外部环境长期偏中性偏强',
-        indicators: [],
-        data_quality: 'mock',
-      },
-    },
-  ],
-  summary: {
-    short: {
-      status: '中性偏弱',
-      score: 42,
-      trend: 'down',
-      desc: '短期美国宏观偏弱，高估值+经济放缓+流动性偏紧，对A股影响中性偏负',
-      indicators: [],
-      data_quality: 'mock',
-    },
-    mid: {
-      status: '复苏',
-      score: 50,
-      trend: 'up',
-      desc: '降息周期开启后中期改善，美股科技股对A股科技板块有示范效应',
-      indicators: [],
-      data_quality: 'mock',
-    },
-    long: {
-      status: '中性',
-      score: 53,
-      trend: 'flat',
-      desc: '长期中性，AI产业机会与高估值风险并存，对A股长期影响有限',
-      indicators: [],
-      data_quality: 'mock',
-    },
+  return types.map((t, i) => {
+    const d = new Date(2026, 2, 1 - i * 5);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return {
+      ts_code: tsCode,
+      ann_date: dateStr,
+      ann_type: t.ann_type,
+      title: t.title,
+      url: `http://www.cninfo.com.cn/new/disclosure/detail?stockCode=${tsCode.split('.')[0]}`,
+      content: null,
+      collected_at: '2026-03-01T00:00:00Z',
+    };
+  });
+}
+
+// 宏观信号（旧版，保留兼容）
+export interface MacroSignal {
+  dimension: string;
+  signal: 'bullish' | 'neutral' | 'bearish';
+  score: number;
+  desc: string;
+  indicators: string[];
+}
+
+export const MACRO_SIGNALS: MacroSignal[] = [
+  {
+    dimension: 'GDP同比增速',
+    signal: 'bullish',
+    score: 68,
+    desc: 'GDP同比5.1%，制造业PMI连续2月回升至50.2，经济动能温和修复',
+    indicators: ['gdp_yoy', 'pmi_mfg'],
   },
-};
+  {
+    dimension: 'CPI同比增速',
+    signal: 'neutral',
+    score: 52,
+    desc: 'CPI温和，PPI仍负但收窄，M2同比增速/社融存量同比回升，流动性宽松',
+    indicators: ['cpi_yoy', 'ppi_yoy', 'm2_yoy', 'social_finance_yoy'],
+  },
+  {
+    dimension: '沪深300 PE（滚动TTM）',
+    signal: 'bullish',
+    score: 72,
+    desc: '沪深300 PE(TTM)约12倍，处历史25%分位，估值偏低',
+    indicators: ['hs300_pe', 'all_a_pe'],
+  },
+  {
+    dimension: '北向资金净流入',
+    signal: 'neutral',
+    score: 55,
+    desc: '北向资金净流入近期改善，但人民币兑美元中间价压力仍存，外资态度谨慎',
+    indicators: ['north_net_flow', 'rmb_usd'],
+  },
+];

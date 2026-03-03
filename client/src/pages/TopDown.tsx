@@ -33,6 +33,7 @@ import {
   MACRO_MATRIX_CN, MACRO_MATRIX_US,
   SECTOR_META_LIST, getSectorLatest, getSectorDailyList,
   getSectorStocks, genStockKline, getStockBasePrice, genStockProfile,
+  genStockFina, genStockAnnouncements,
   type MacroSignal, type MacroMatrix, type MatrixCell, type MatrixRegion,
   type SectorMeta, type StockMeta, type StockDaily
 } from '@/data/topdown-mock';
@@ -841,16 +842,16 @@ function KlineChart({ tsCode, basePrice }: { tsCode: string; basePrice: number }
 }
 
 // ─── 资金流向面板 ─────────────────────────────────────────────────────────────
+// 字段对应 stock_moneyflow 表：net_amount, buy_elg_amount, buy_lg_amount, buy_md_amount, buy_sm_amount
 function MoneyFlowPanel({ profile }: { profile: ReturnType<typeof genStockProfile> }) {
-  const netFlow = profile.net_mf_amount;
+  const netFlow = profile.net_amount;   // stock_moneyflow.net_amount（万元）
   const isNetIn = netFlow > 0;
-  const totalBuy = profile.buy_lg_amount + profile.buy_md_amount + profile.buy_sm_amount;
-  const totalSell = profile.sell_lg_amount + profile.sell_md_amount + profile.sell_sm_amount;
 
   const items = [
-    { label: '大单', buy: profile.buy_lg_amount, sell: profile.sell_lg_amount, color: '#ef4444' },
-    { label: '中单', buy: profile.buy_md_amount, sell: profile.sell_md_amount, color: '#f59e0b' },
-    { label: '小单', buy: profile.buy_sm_amount, sell: profile.sell_sm_amount, color: '#94a3b8' },
+    { label: '特大单', buy: profile.buy_elg_amount, sell: profile.sell_elg_amount, color: '#7c3aed' },
+    { label: '大单',   buy: profile.buy_lg_amount,  sell: profile.sell_lg_amount,  color: '#ef4444' },
+    { label: '中单',   buy: profile.buy_md_amount,  sell: profile.sell_md_amount,  color: '#f59e0b' },
+    { label: '小单',   buy: profile.buy_sm_amount,  sell: profile.sell_sm_amount,  color: '#94a3b8' },
   ];
 
   return (
@@ -858,7 +859,7 @@ function MoneyFlowPanel({ profile }: { profile: ReturnType<typeof genStockProfil
       <div className="flex items-center gap-2">
         <DollarSign className="w-4 h-4 text-gray-400" />
         <span className="text-sm font-semibold text-gray-700">资金流向</span>
-        <span className="text-xs text-gray-400">（Mock · 接库后接 moneyflow 表）</span>
+        <span className="text-xs text-gray-400">（Mock · 接库后接 stock_moneyflow 表）</span>
       </div>
       {/* 净流入汇总 */}
       <div className={`rounded-lg p-3 flex items-center justify-between ${isNetIn ? 'bg-red-50 border border-red-100' : 'bg-green-50 border border-green-100'}`}>
@@ -906,11 +907,186 @@ function MoneyFlowPanel({ profile }: { profile: ReturnType<typeof genStockProfil
   );
 }
 
+// ─── 基本面面板（stock_daily_basic 格式）───────────────────────────────────────────
+function FundamentalsPanel({ profile }: { profile: ReturnType<typeof genStockProfile> }) {
+  const items = [
+    { label: 'PE(TTM)', value: profile.pe_ttm.toFixed(1), unit: '倍', field: 'pe_ttm' },
+    { label: 'PB', value: profile.pb.toFixed(2), unit: '倍', field: 'pb' },
+    { label: 'PS(TTM)', value: profile.ps_ttm.toFixed(2), unit: '倍', field: 'ps_ttm' },
+    { label: '股息率', value: profile.dv_ratio.toFixed(2), unit: '%', field: 'dv_ratio' },
+    { label: '换手率', value: profile.turnover_rate.toFixed(2), unit: '%', field: 'turnover_rate' },
+    { label: '量比', value: profile.volume_ratio.toFixed(2), unit: '', field: 'volume_ratio' },
+    { label: '总市値', value: fmtMv(profile.total_mv), unit: '', field: 'total_mv' },
+    { label: '流通市値', value: fmtMv(profile.circ_mv), unit: '', field: 'circ_mv' },
+    { label: '52周高', value: profile.high_52w.toFixed(2), unit: '', field: 'high_52w' },
+    { label: '52周低', value: profile.low_52w.toFixed(2), unit: '', field: 'low_52w' },
+  ];
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-gray-400 flex items-center gap-1">
+        <span className="bg-amber-50 border border-amber-200 text-amber-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+        stock_daily_basic 表（Mock，接库后实时更新）
+      </div>
+      <div className="grid grid-cols-5 gap-2">
+        {items.map(item => (
+          <div key={item.label} className="bg-gray-50 rounded-lg p-2.5 text-center">
+            <div className="text-[10px] text-gray-400 font-mono">{item.field}</div>
+            <div className="text-xs text-gray-400 mt-0.5">{item.label}</div>
+            <div className="text-sm font-bold text-gray-800 mt-1">{item.value}<span className="text-xs text-gray-400">{item.unit}</span></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── 财务面板（stock_fina_indicator + stock_income + stock_balance 格式）───────────────────
+function FinancialPanel({ tsCode }: { tsCode: string }) {
+  const { fina, income, balance } = genStockFina(tsCode);
+
+  function fmtFinaNum(v: number | null, unit = '亿'): string {
+    if (v === null) return '—';
+    if (unit === '亿') return (v / 1e8).toFixed(2) + '亿';
+    if (unit === '%') return v.toFixed(2) + '%';
+    return v.toFixed(4);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="text-xs text-gray-400 flex items-center gap-1">
+        <span className="bg-amber-50 border border-amber-200 text-amber-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+        stock_fina_indicator / stock_income / stock_balance（Mock，报告期更新）
+        <span className="ml-auto text-gray-400">2025年年报 {fina.end_date}</span>
+      </div>
+
+      {/* 核心财务指标 */}
+      <div>
+        <div className="text-xs font-semibold text-gray-600 mb-2">盈利能力（stock_fina_indicator）</div>
+        <div className="grid grid-cols-4 gap-2">
+          {[
+            { label: 'ROE', value: fmtFinaNum(fina.roe, '%'), field: 'roe', highlight: (fina.roe ?? 0) > 15 },
+            { label: 'ROA', value: fmtFinaNum(fina.roa, '%'), field: 'roa', highlight: false },
+            { label: '毛利率', value: fmtFinaNum(fina.grossprofit_margin, '%'), field: 'grossprofit_margin', highlight: false },
+            { label: '净利率', value: fmtFinaNum(fina.netprofit_margin, '%'), field: 'netprofit_margin', highlight: false },
+            { label: '资负率', value: fmtFinaNum(fina.debt_to_assets, '%'), field: 'debt_to_assets', highlight: (fina.debt_to_assets ?? 0) > 70 },
+            { label: '流动比率', value: fina.current_ratio?.toFixed(2) ?? '—', field: 'current_ratio', highlight: false },
+            { label: '归母净利同比', value: fmtFinaNum(fina.netprofit_yoy, '%'), field: 'netprofit_yoy', highlight: (fina.netprofit_yoy ?? 0) > 20 },
+            { label: '营收同比', value: fmtFinaNum(fina.or_yoy, '%'), field: 'or_yoy', highlight: (fina.or_yoy ?? 0) > 15 },
+          ].map(item => (
+            <div key={item.label} className={`rounded-lg p-2.5 text-center border ${
+              item.highlight ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'
+            }`}>
+              <div className="text-[10px] text-gray-400 font-mono">{item.field}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{item.label}</div>
+              <div className={`text-sm font-bold mt-1 ${item.highlight ? 'text-red-600' : 'text-gray-800'}`}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 利润表摘要 */}
+      <div>
+        <div className="text-xs font-semibold text-gray-600 mb-2">利润表摘要（stock_income）</div>
+        <div className="grid grid-cols-4 gap-2">
+          {[
+            { label: '营业总收入', value: fmtFinaNum(income.total_revenue), field: 'total_revenue' },
+            { label: '营业利润', value: fmtFinaNum(income.operate_profit), field: 'operate_profit' },
+            { label: '归母净利润', value: fmtFinaNum(income.n_income_attr_p), field: 'n_income_attr_p' },
+            { label: '研发费用', value: fmtFinaNum(income.rd_exp), field: 'rd_exp' },
+            { label: 'EBIT', value: fmtFinaNum(income.ebit), field: 'ebit' },
+            { label: 'EBITDA', value: fmtFinaNum(income.ebitda), field: 'ebitda' },
+            { label: '基本每股收益', value: income.basic_eps?.toFixed(4) ?? '—', field: 'basic_eps' },
+            { label: '净利润', value: fmtFinaNum(income.n_income), field: 'n_income' },
+          ].map(item => (
+            <div key={item.label} className="bg-gray-50 border border-gray-100 rounded-lg p-2.5 text-center">
+              <div className="text-[10px] text-gray-400 font-mono">{item.field}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{item.label}</div>
+              <div className="text-sm font-bold text-gray-800 mt-1">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 资产负债表摘要 */}
+      <div>
+        <div className="text-xs font-semibold text-gray-600 mb-2">资产负债表摘要（stock_balance）</div>
+        <div className="grid grid-cols-4 gap-2">
+          {[
+            { label: '总资产', value: fmtFinaNum(balance.total_assets), field: 'total_assets' },
+            { label: '总负债', value: fmtFinaNum(balance.total_liab), field: 'total_liab' },
+            { label: '归母净资产', value: fmtFinaNum(balance.total_hldr_eqy_exc_min_int), field: 'total_hldr_eqy_exc_min_int' },
+            { label: '货币资金', value: fmtFinaNum(balance.money_cap), field: 'money_cap' },
+            { label: '应收账款', value: fmtFinaNum(balance.accounts_receiv), field: 'accounts_receiv' },
+            { label: '存货', value: fmtFinaNum(balance.inventories), field: 'inventories' },
+            { label: '长期借款', value: fmtFinaNum(balance.lt_borr), field: 'lt_borr' },
+            { label: '短期借款', value: fmtFinaNum(balance.st_borr), field: 'st_borr' },
+          ].map(item => (
+            <div key={item.label} className="bg-gray-50 border border-gray-100 rounded-lg p-2.5 text-center">
+              <div className="text-[10px] text-gray-400 font-mono">{item.field}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{item.label}</div>
+              <div className="text-sm font-bold text-gray-800 mt-1">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 公告面板（stock_announcement 格式）───────────────────────────────────────────────────
+function AnnouncementPanel({ tsCode, nameCn }: { tsCode: string; nameCn: string }) {
+  const announcements = genStockAnnouncements(tsCode, nameCn);
+  const typeLabel: Record<string, { label: string; color: string }> = {
+    annual:  { label: '年报', color: 'bg-red-50 text-red-700 border-red-200' },
+    semi:    { label: '半年报', color: 'bg-orange-50 text-orange-700 border-orange-200' },
+    quarter: { label: '季报', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    other:   { label: '临时公告', color: 'bg-gray-50 text-gray-600 border-gray-200' },
+  };
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-gray-400 flex items-center gap-1">
+        <span className="bg-amber-50 border border-amber-200 text-amber-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+        stock_announcement 表（Mock，接库后实时同步巨潮财经公告）
+      </div>
+      <div className="space-y-2">
+        {announcements.map((ann, i) => {
+          const t = typeLabel[ann.ann_type] ?? typeLabel.other;
+          return (
+            <div key={i} className="bg-white border border-gray-100 rounded-lg p-3 hover:border-blue-200 hover:shadow-sm transition-all">
+              <div className="flex items-start gap-2">
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border flex-shrink-0 mt-0.5 ${t.color}`}>{t.label}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-gray-800 font-medium leading-snug">{ann.title}</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] text-gray-400 font-mono">{ann.ann_date}</span>
+                    {ann.url && (
+                      <a
+                        href={ann.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-blue-500 hover:text-blue-700 hover:underline"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        查看原文 ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-xs text-gray-400 text-center py-2">展示最近 6 条公告，接库后可按时间/类型过滤</div>
+    </div>
+  );
+}
+
 // ─── 个股详情面板 ─────────────────────────────────────────────────────────────
 function StockDetailPanel({ stock, onClose }: { stock: StockMeta; onClose: () => void }) {
   const profile = genStockProfile(stock);
   const basePrice = getStockBasePrice(stock.ts_code);
-  const [activeTab, setActiveTab] = useState<'kline' | 'flow'>('kline');
+  const [activeTab, setActiveTab] = useState<'kline' | 'flow' | 'funda' | 'fina' | 'ann'>('kline');
 
   return (
     <div className="space-y-4">
@@ -936,17 +1112,13 @@ function StockDetailPanel({ stock, onClose }: { stock: StockMeta; onClose: () =>
         </button>
       </div>
 
-      {/* 关键指标卡片 */}
+      {/* 头部关键指标卡片（常显） */}
       <div className="grid grid-cols-4 gap-2">
         {[
           { label: 'PE(TTM)', value: profile.pe_ttm.toFixed(1) + '倍' },
           { label: 'PB', value: profile.pb.toFixed(2) + '倍' },
-          { label: 'PS(TTM)', value: profile.ps_ttm.toFixed(2) + '倍' },
           { label: '换手率', value: profile.turnover_rate.toFixed(2) + '%' },
-          { label: '量比', value: profile.volume_ratio.toFixed(2) },
-          { label: '总市值', value: fmtMv(profile.total_mv) },
-          { label: '52周高', value: profile.high_52w.toFixed(2) },
-          { label: '52周低', value: profile.low_52w.toFixed(2) },
+          { label: '总市値', value: fmtMv(profile.total_mv) },
         ].map(item => (
           <div key={item.label} className="bg-gray-50 rounded-lg p-2.5 text-center">
             <div className="text-xs text-gray-400">{item.label}</div>
@@ -955,8 +1127,8 @@ function StockDetailPanel({ stock, onClose }: { stock: StockMeta; onClose: () =>
         ))}
       </div>
 
-      {/* 标签页切换 */}
-      <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5 w-fit">
+      {/* 标签页切换（五个标签页） */}
+      <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
         <button
           onClick={() => setActiveTab('kline')}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-all ${activeTab === 'kline' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
@@ -969,11 +1141,32 @@ function StockDetailPanel({ stock, onClose }: { stock: StockMeta; onClose: () =>
         >
           <Zap className="w-3.5 h-3.5" /> 资金流向
         </button>
+        <button
+          onClick={() => setActiveTab('funda')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-all ${activeTab === 'funda' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <BarChart2 className="w-3.5 h-3.5" /> 基本面
+        </button>
+        <button
+          onClick={() => setActiveTab('fina')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-all ${activeTab === 'fina' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <DollarSign className="w-3.5 h-3.5" /> 财务
+        </button>
+        <button
+          onClick={() => setActiveTab('ann')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-all ${activeTab === 'ann' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <Info className="w-3.5 h-3.5" /> 公告
+        </button>
       </div>
 
       {/* 内容区 */}
       {activeTab === 'kline' && <KlineChart tsCode={stock.ts_code} basePrice={basePrice} />}
       {activeTab === 'flow' && <MoneyFlowPanel profile={profile} />}
+      {activeTab === 'funda' && <FundamentalsPanel profile={profile} />}
+      {activeTab === 'fina' && <FinancialPanel tsCode={stock.ts_code} />}
+      {activeTab === 'ann' && <AnnouncementPanel tsCode={stock.ts_code} nameCn={stock.name_cn} />}
     </div>
   );
 }
@@ -1031,14 +1224,14 @@ export default function TopDown() {
               onClick={handleBackToMacro}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${activeLayer === 1 ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-500 hover:bg-gray-100'}`}
             >
-              <Globe className="w-3.5 h-3.5" /> 宏观择时
+              <Globe className="w-3.5 h-3.5" /> 宏观/大盘
             </button>
             <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
             <button
               onClick={handleBackToSector}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${activeLayer === 2 ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-500 hover:bg-gray-100'}`}
             >
-              <BarChart2 className="w-3.5 h-3.5" /> 板块轮动
+              <BarChart2 className="w-3.5 h-3.5" /> 中观/板块
             </button>
             {selectedSector && (
               <>
@@ -1067,9 +1260,9 @@ export default function TopDown() {
           {/* 三步骤进度指示 */}
           <div className="flex items-center gap-0 mb-6 bg-white border border-gray-100 rounded-xl p-1 shadow-sm">
             {[
-              { step: 1, icon: <Globe className="w-4 h-4" />, label: '宏观择时', desc: '判断当前市场环境' },
-              { step: 2, icon: <BarChart2 className="w-4 h-4" />, label: '板块轮动', desc: '找到强势板块' },
-              { step: 3, icon: <Star className="w-4 h-4" />, label: '个股精选', desc: '精选板块内个股' },
+              { step: 1, icon: <Globe className="w-4 h-4" />, label: '宏观/大盘', desc: '判断当前市场环境' },
+              { step: 2, icon: <BarChart2 className="w-4 h-4" />, label: '中观/板块', desc: '找到强势板块' },
+              { step: 3, icon: <Star className="w-4 h-4" />, label: '微观/个股', desc: '精选板块内个股' },
             ].map(({ step, icon, label, desc }, i) => {
               const isActive = activeLayer === step;
               const isDone = activeLayer > step;
@@ -1096,14 +1289,14 @@ export default function TopDown() {
             })}
           </div>
 
-          {/* Layer 1: 宏观择时 */}
+          {/* Layer 1: 宏观/大盘 */}
           {activeLayer === 1 && (
             <div>
               <MacroPanel onNext={() => setActiveLayer(2)} />
             </div>
           )}
 
-          {/* Layer 2: 板块轮动 */}
+          {/* Layer 2: 中观/板块 */}
           {activeLayer === 2 && (
             <div>
               <SectorPanel onSelectSector={handleSelectSector} />
