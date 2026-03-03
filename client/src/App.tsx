@@ -9,13 +9,16 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import TopDown from "./pages/TopDown";
-
-
+import Dashboard from "./pages/Dashboard";
+import Holdings from "./pages/Holdings";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/" component={Dashboard} />
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/dashboard/holdings" component={Holdings} />
+      <Route path="/macro" component={Home} />
       <Route path="/knowledge" component={Knowledge} />
       <Route path="/knowledge/:id" component={Knowledge} />
       <Route path="/admin/data" component={DataAdmin} />
