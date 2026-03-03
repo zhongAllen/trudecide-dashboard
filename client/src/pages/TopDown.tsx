@@ -14,24 +14,24 @@
  *   - T日分时（5min/30min/1h）：新浪财经实时接口
  *     https://quotes.sina.com.cn/cn/sh/minute/[code].json
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link } from 'wouter';
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, ChevronRight,
-  BarChart2, Activity, Globe, Layers, Star, RefreshCw,
-  ArrowUpRight, ArrowDownRight, Info, X, Search
+  BarChart2, Activity, Globe, Layers, Star, 
+  ArrowUpRight, ArrowDownRight, Info, X, Search,
+  ChevronDown, ChevronUp, DollarSign, Zap
 } from 'lucide-react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
   ResponsiveContainer, Cell, ReferenceLine, Area, AreaChart
 } from 'recharts';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   MACRO_SIGNALS, MACRO_VALUES, MACRO_INDICATORS,
   MACRO_MATRIX_CN, MACRO_MATRIX_US,
-  SECTOR_META_LIST, SECTOR_DAILY_MAP, getSectorLatest,
+  SECTOR_META_LIST, getSectorLatest, getSectorDailyList,
   getSectorStocks, genStockKline, getStockBasePrice, genStockProfile,
   type MacroSignal, type MacroMatrix, type MatrixCell, type MatrixRegion,
   type SectorMeta, type StockMeta, type StockDaily
@@ -61,6 +61,11 @@ function fmtMv(v: number) {
   if (v >= 1000) return `${(v / 1000).toFixed(1)}千亿`;
   return `${v.toFixed(0)}亿`;
 }
+function fmtAmount(v: number) {
+  // v 单位：万元
+  if (v >= 10000) return `${(v / 10000).toFixed(1)}亿`;
+  return `${v.toFixed(0)}万`;
+}
 
 // ─── 宏观信号徽章 ─────────────────────────────────────────────────────────────
 function SignalBadge({ signal }: { signal: MacroSignal['signal'] }) {
@@ -85,11 +90,11 @@ function SignalBadge({ signal }: { signal: MacroSignal['signal'] }) {
 function MiniLineChart({ indicatorId, color = '#3b82f6' }: { indicatorId: string; color?: string }) {
   const values = MACRO_VALUES[indicatorId] ?? [];
   const data = values.slice(-12).map(v => ({ v: v.value, d: v.trade_date.slice(0, 7) }));
-  if (data.length === 0) return <div className="h-12 bg-gray-50 rounded" />;
+  if (data.length === 0) return <div className="h-10 bg-gray-50 rounded" />;
   const min = Math.min(...data.map(d => d.v));
   const max = Math.max(...data.map(d => d.v));
   return (
-    <ResponsiveContainer width="100%" height={48}>
+    <ResponsiveContainer width="100%" height={40}>
       <AreaChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
         <defs>
           <linearGradient id={`grad-${indicatorId}`} x1="0" y1="0" x2="0" y2="1">
@@ -106,14 +111,13 @@ function MiniLineChart({ indicatorId, color = '#3b82f6' }: { indicatorId: string
 
 // ─── 矩阵单元格评分颜色 ──────────────────────────────────────────────────────
 function cellScoreColor(score: number): string {
-  if (score >= 70) return '#ef4444'; // 红色偏多
-  if (score >= 55) return '#f59e0b'; // 橙色中性偏多
-  if (score >= 45) return '#94a3b8'; // 灰色中性
-  if (score >= 30) return '#3b82f6'; // 蓝色中性偏空
-  return '#22c55e'; // 绿色偏空
+  if (score >= 70) return '#ef4444';
+  if (score >= 55) return '#f59e0b';
+  if (score >= 45) return '#94a3b8';
+  if (score >= 30) return '#3b82f6';
+  return '#22c55e';
 }
 
-// 矩阵单元格背景色（浅色版）
 function cellBgClass(score: number): string {
   if (score >= 70) return 'bg-red-50 border-red-100';
   if (score >= 55) return 'bg-amber-50 border-amber-100';
@@ -122,7 +126,6 @@ function cellBgClass(score: number): string {
   return 'bg-green-50 border-green-100';
 }
 
-// 矩阵单元格状态标签颜色
 function cellStatusClass(score: number): string {
   if (score >= 70) return 'text-red-700 bg-red-100';
   if (score >= 55) return 'text-amber-700 bg-amber-100';
@@ -131,14 +134,12 @@ function cellStatusClass(score: number): string {
   return 'text-green-700 bg-green-100';
 }
 
-// 趋势箭头
 function TrendArrow({ trend }: { trend: MatrixCell['trend'] }) {
   if (trend === 'up') return <ArrowUpRight className="w-3 h-3 text-red-500" />;
   if (trend === 'down') return <ArrowDownRight className="w-3 h-3 text-green-600" />;
   return <Minus className="w-3 h-3 text-gray-400" />;
 }
 
-// 数据质量标记
 function DataQualityBadge({ quality }: { quality: MatrixCell['data_quality'] }) {
   if (quality === 'mock') return (
     <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0 rounded font-medium">测试</span>
@@ -147,6 +148,61 @@ function DataQualityBadge({ quality }: { quality: MatrixCell['data_quality'] }) 
     <span className="text-[10px] text-orange-600 bg-orange-50 border border-orange-200 px-1 py-0 rounded font-medium">⚠</span>
   );
   return null;
+}
+
+// ─── 宏观矩阵展开详情面板 ────────────────────────────────────────────────────
+function CellExpandPanel({ cell, dimension, period }: {
+  cell: MatrixCell;
+  dimension: string;
+  period: string;
+}) {
+  return (
+    <div className="mt-2 pt-2 border-t border-white/50 space-y-2">
+      {/* 描述 */}
+      <p className="text-[11px] text-gray-700 leading-relaxed">{cell.desc}</p>
+      {/* 关联指标列表 */}
+      {cell.indicators.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">关联指标</div>
+          {cell.indicators.slice(0, 3).map(id => {
+            const meta = MACRO_INDICATORS.find(m => m.id === id);
+            const vals = MACRO_VALUES[id] ?? [];
+            const latest = vals[vals.length - 1];
+            const prev = vals[vals.length - 2];
+            const change = latest && prev ? latest.value - prev.value : null;
+            return (
+              <div key={id} className="bg-white/80 rounded-lg p-2 border border-white/50">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] text-gray-500 font-medium">{meta?.name_cn ?? id}</span>
+                  <div className="flex items-center gap-1">
+                    {change !== null && (
+                      <span className="text-[10px]" style={{ color: change > 0 ? UP_COLOR : change < 0 ? DOWN_COLOR : FLAT_COLOR }}>
+                        {change > 0 ? '▲' : change < 0 ? '▼' : '—'}{Math.abs(change).toFixed(2)}
+                      </span>
+                    )}
+                    <span className="text-[11px] font-bold text-gray-800">
+                      {latest ? `${latest.value}${meta?.unit ?? ''}` : '—'}
+                    </span>
+                  </div>
+                </div>
+                {vals.length > 0 && <MiniLineChart indicatorId={id} color={cellScoreColor(cell.score)} />}
+              </div>
+            );
+          })}
+          {cell.indicators.length > 3 && (
+            <div className="text-[10px] text-gray-400 text-center">
+              + {cell.indicators.length - 3} 个指标（接库后显示）
+            </div>
+          )}
+        </div>
+      )}
+      {cell.indicators.length === 0 && (
+        <div className="text-[10px] text-gray-400 bg-white/50 rounded p-2 text-center">
+          暂无结构化指标数据，接库后接入
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Layer 1: 宏观状态矩阵面板 ───────────────────────────────────────────────
@@ -161,7 +217,6 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
     { key: 'long',  label: '长期', sub: '5-10 年' },
   ];
 
-  // 综合评分（取短期 summary 分数）
   const shortScore = matrix.summary.short.score;
   const isPositive = shortScore >= 60;
 
@@ -177,17 +232,17 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
                 <Info className="w-3.5 h-3.5 text-gray-400 cursor-help" />
               </TooltipTrigger>
               <TooltipContent side="right" className="max-w-xs text-xs">
-                基于 indicator_values 表中的宏观指标，对四个维度在三个时间周期内进行综合评估。
+                基于 indicator_values 表中的宏观指标，对五个维度在三个时间周期内进行综合评估。
                 评分 0-100，≥70 偏多（红），45-70 中性（灰/橙），≤45 偏空（绿/蓝）。
+                点击单元格可展开详细指标数据。
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
         <div className="flex items-center gap-2">
-          {/* 地区切换 */}
           <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
             <button
-              onClick={() => setRegion('CN')}
+              onClick={() => { setRegion('CN'); setExpandedCell(null); }}
               className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-md font-medium transition-all ${
                 region === 'CN' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -195,7 +250,7 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
               🇨🇳 中国
             </button>
             <button
-              onClick={() => setRegion('US')}
+              onClick={() => { setRegion('US'); setExpandedCell(null); }}
               className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-md font-medium transition-all ${
                 region === 'US' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -251,7 +306,7 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
                   key={p.key}
                   className={`px-3 py-3 border-l border-gray-100 cursor-pointer transition-all hover:brightness-95 ${
                     cellBgClass(cell.score)
-                  }`}
+                  } ${isExpanded ? 'ring-1 ring-inset ring-blue-300' : ''}`}
                   onClick={() => setExpandedCell(isExpanded ? null : cellKey)}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -261,6 +316,10 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
                     <div className="flex items-center gap-1">
                       <TrendArrow trend={cell.trend} />
                       <DataQualityBadge quality={cell.data_quality} />
+                      {isExpanded
+                        ? <ChevronUp className="w-3 h-3 text-blue-400" />
+                        : <ChevronDown className="w-3 h-3 text-gray-300" />
+                      }
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -276,29 +335,7 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
                   </div>
                   {/* 展开详情 */}
                   {isExpanded && (
-                    <div className="mt-2 pt-2 border-t border-white/50">
-                      <p className="text-[11px] text-gray-600 leading-relaxed">{cell.desc}</p>
-                      {cell.indicators.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {cell.indicators.slice(0, 2).map(id => {
-                            const meta = MACRO_INDICATORS.find(m => m.id === id);
-                            const vals = MACRO_VALUES[id] ?? [];
-                            const latest = vals[vals.length - 1];
-                            return (
-                              <div key={id} className="bg-white/70 rounded p-1.5">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[10px] text-gray-500">{meta?.name_cn ?? id}</span>
-                                  <span className="text-[11px] font-bold text-gray-800">
-                                    {latest ? `${latest.value}${meta?.unit ?? ''}` : '—'}
-                                  </span>
-                                </div>
-                                <MiniLineChart indicatorId={id} color={cellScoreColor(cell.score)} />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                    <CellExpandPanel cell={cell} dimension={row.dimension} period={p.key} />
                   )}
                 </div>
               );
@@ -335,6 +372,7 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
                     {cell.score}
                   </span>
                 </div>
+                <p className="text-[10px] text-gray-500 mt-1 leading-relaxed line-clamp-2">{cell.desc}</p>
               </div>
             );
           })}
@@ -360,6 +398,35 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
   );
 }
 
+// ─── 板块迷你 K 线图 ──────────────────────────────────────────────────────────
+function SectorMiniKline({ sectorId, trend }: { sectorId: string; trend: number }) {
+  const data = getSectorDailyList(sectorId).slice(-20).map(d => ({
+    v: d.close,
+    pct: d.pct_change,
+  }));
+  const color = trend > 1 ? UP_COLOR : trend < -1 ? DOWN_COLOR : FLAT_COLOR;
+  return (
+    <ResponsiveContainer width="100%" height={32}>
+      <AreaChart data={data} margin={{ top: 1, right: 1, bottom: 1, left: 1 }}>
+        <defs>
+          <linearGradient id={`sg-${sectorId.replace(/\./g, '_')}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+            <stop offset="95%" stopColor={color} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <Area
+          type="monotone"
+          dataKey="v"
+          stroke={color}
+          strokeWidth={1.5}
+          fill={`url(#sg-${sectorId.replace(/\./g, '_')})`}
+          dot={false}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
 // ─── Layer 2: 板块轮动面板 ────────────────────────────────────────────────────
 type SectorFilter = 'all' | '行业板块' | '概念板块' | '风格板块';
 
@@ -381,8 +448,30 @@ function SectorPanel({ onSelectSector }: { onSelectSector: (s: SectorMeta) => vo
       return (b.latest?.turnover_rate ?? 0) - (a.latest?.turnover_rate ?? 0);
     });
 
+  // 今日涨跌分布
+  const allSectors = SECTOR_META_LIST.map(s => getSectorLatest(s.id));
+  const upCount = allSectors.filter(s => (s?.pct_change ?? 0) > 0).length;
+  const downCount = allSectors.filter(s => (s?.pct_change ?? 0) < 0).length;
+  const flatCount = allSectors.length - upCount - downCount;
+
   return (
     <div className="space-y-3">
+      {/* 市场情绪概览 */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-center">
+          <div className="text-2xl font-bold text-red-600">{upCount}</div>
+          <div className="text-xs text-gray-500 mt-0.5">上涨板块</div>
+        </div>
+        <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
+          <div className="text-2xl font-bold text-gray-500">{flatCount}</div>
+          <div className="text-xs text-gray-500 mt-0.5">平盘板块</div>
+        </div>
+        <div className="bg-green-50 border border-green-100 rounded-xl p-3 text-center">
+          <div className="text-2xl font-bold text-green-600">{downCount}</div>
+          <div className="text-xs text-gray-500 mt-0.5">下跌板块</div>
+        </div>
+      </div>
+
       {/* 过滤栏 */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
@@ -397,7 +486,7 @@ function SectorPanel({ onSelectSector }: { onSelectSector: (s: SectorMeta) => vo
           ))}
         </div>
         <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5 ml-auto">
-          {[['pct', '涨跌幅'], ['mv', '市值'], ['turnover', '换手率']] .map(([k, label]) => (
+          {[['pct', '涨跌幅'], ['mv', '市值'], ['turnover', '换手率']].map(([k, label]) => (
             <button
               key={k}
               onClick={() => setSortBy(k as typeof sortBy)}
@@ -418,16 +507,16 @@ function SectorPanel({ onSelectSector }: { onSelectSector: (s: SectorMeta) => vo
         </div>
       </div>
 
-      {/* 板块热力图 + 列表 */}
-      <div className="grid grid-cols-4 gap-1.5">
+      {/* 板块热力图 */}
+      <div className="grid grid-cols-5 gap-1.5">
         {filtered.slice(0, 20).map(s => {
           const pct = s.latest?.pct_change ?? 0;
           const intensity = Math.min(Math.abs(pct) / 5, 1);
           const bg = pct > 0
-            ? `rgba(239,68,68,${0.1 + intensity * 0.5})`
+            ? `rgba(239,68,68,${0.08 + intensity * 0.45})`
             : pct < 0
-              ? `rgba(34,197,94,${0.1 + intensity * 0.5})`
-              : 'rgba(148,163,184,0.1)';
+              ? `rgba(34,197,94,${0.08 + intensity * 0.45})`
+              : 'rgba(148,163,184,0.08)';
           return (
             <button
               key={s.id}
@@ -439,10 +528,7 @@ function SectorPanel({ onSelectSector }: { onSelectSector: (s: SectorMeta) => vo
               <div className="text-sm font-bold mt-0.5" style={{ color: pctColor(pct) }}>
                 {fmtPct(pct)}
               </div>
-              {s.latest?.turnover_rate && (
-                <div className="text-xs text-gray-400">换手 {s.latest.turnover_rate.toFixed(1)}%</div>
-              )}
-              <ChevronRight className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-300 group-hover:text-blue-400 transition-colors" />
+              <SectorMiniKline sectorId={s.id} trend={pct} />
             </button>
           );
         })}
@@ -454,29 +540,41 @@ function SectorPanel({ onSelectSector }: { onSelectSector: (s: SectorMeta) => vo
           <span className="text-xs font-semibold text-gray-700">板块排行（今日）</span>
           <span className="text-xs text-gray-400">{filtered.length} 个板块</span>
         </div>
-        <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
-          {filtered.slice(0, 15).map((s, i) => {
+        <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+          {filtered.slice(0, 20).map((s, i) => {
             const pct = s.latest?.pct_change ?? 0;
+            const dailyList = getSectorDailyList(s.id);
+            const prev5 = dailyList.slice(-6, -1);
+            const avg5pct = prev5.length > 0
+              ? prev5.reduce((sum, d) => sum + d.pct_change, 0) / prev5.length
+              : 0;
             return (
               <button
                 key={s.id}
                 onClick={() => onSelectSector(s)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 transition-colors text-left group"
+                className="w-full grid grid-cols-[24px_1fr_60px_80px_60px_60px] gap-0 px-4 py-2.5 hover:bg-blue-50 transition-colors text-left group items-center"
               >
-                <span className="text-xs text-gray-400 w-4 text-center">{i + 1}</span>
-                <span className="flex-1 text-sm font-medium text-gray-800">{s.name_cn}</span>
-                <span className="text-xs text-gray-400">{s.idx_type}</span>
-                <span className="text-sm font-bold w-16 text-right tabular-nums" style={{ color: pctColor(pct) }}>
+                <span className="text-xs text-gray-400 text-center">{i + 1}</span>
+                <div>
+                  <span className="text-sm font-medium text-gray-800">{s.name_cn}</span>
+                  <span className="text-xs text-gray-400 ml-1.5">{s.idx_type}</span>
+                </div>
+                <span className="text-sm font-bold text-right tabular-nums" style={{ color: pctColor(pct) }}>
                   {fmtPct(pct)}
                 </span>
-                {s.latest?.up_num && (
-                  <span className="text-xs text-gray-400 w-16 text-right">
+                <div className="px-1">
+                  <SectorMiniKline sectorId={s.id} trend={pct} />
+                </div>
+                <span className="text-xs text-gray-400 text-right tabular-nums">
+                  5日均{fmtPct(avg5pct, 1)}
+                </span>
+                {s.latest?.up_num ? (
+                  <span className="text-xs text-right">
                     <span className="text-red-500">{s.latest.up_num}↑</span>
-                    <span className="text-gray-300 mx-1">/</span>
+                    <span className="text-gray-300 mx-0.5">/</span>
                     <span className="text-green-600">{s.latest.down_num}↓</span>
                   </span>
-                )}
-                <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 transition-colors" />
+                ) : <span />}
               </button>
             );
           })}
@@ -547,17 +645,13 @@ function StockListPanel({ sector, onSelectStock }: {
 type KlinePeriod = 'daily' | 'weekly' | 'monthly';
 type IntradayPeriod = '5min' | '30min' | '60min';
 
-// 新浪财经分时数据接口（T日实时）
-// 接口：https://quotes.sina.com.cn/cn/sh/minute/[code].json
-// 字段：time, price, volume, amount
 interface SinaMinuteBar {
-  time: string;   // "09:30"
+  time: string;
   price: number;
   volume: number;
   amount: number;
 }
 
-// Mock 分时数据（模拟新浪财经返回格式）
 function genIntradayData(basePrice: number, period: IntradayPeriod): SinaMinuteBar[] {
   const result: SinaMinuteBar[] = [];
   const stepMinutes = period === '5min' ? 5 : period === '30min' ? 30 : 60;
@@ -565,11 +659,10 @@ function genIntradayData(basePrice: number, period: IntradayPeriod): SinaMinuteB
   let price = basePrice;
   let totalMinutes = 0;
 
-  while (totalMinutes < 240) { // 4小时交易时间
+  while (totalMinutes < 240) {
     const absMinutes = startHour * 60 + startMin + totalMinutes;
     const h = Math.floor(absMinutes / 60);
     const m = absMinutes % 60;
-    // 跳过午休 11:30-13:00
     if (h === 11 && m >= 30) { totalMinutes += stepMinutes; continue; }
     if (h === 12) { totalMinutes += stepMinutes; continue; }
     if (h >= 15) break;
@@ -588,7 +681,6 @@ function genIntradayData(basePrice: number, period: IntradayPeriod): SinaMinuteB
   return result;
 }
 
-// 自定义 K 线 Tooltip
 function KlineTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: StockDaily & { isUp?: boolean } }> }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
@@ -606,7 +698,6 @@ function KlineTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   );
 }
 
-// 分时图 Tooltip
 function IntradayTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: SinaMinuteBar }> }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
@@ -636,11 +727,9 @@ function KlineChart({ tsCode, basePrice }: { tsCode: string; basePrice: number }
     }
   }, [isIntraday, basePrice, intradayPeriod]);
 
-  // 计算 K 线显示数据（添加 isUp 标记）
   const chartData = klineData.map(d => ({
     ...d,
     isUp: d.close >= d.open,
-    // recharts 不直接支持蜡烛图，用 Bar 模拟：bodyLow/bodyHigh
     bodyLow: Math.min(d.open, d.close),
     bodyHigh: Math.max(d.open, d.close),
     bodySize: Math.abs(d.close - d.open),
@@ -654,7 +743,6 @@ function KlineChart({ tsCode, basePrice }: { tsCode: string; basePrice: number }
 
   return (
     <div className="space-y-3">
-      {/* 周期切换 */}
       <div className="flex items-center gap-2">
         <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
           {[
@@ -704,7 +792,6 @@ function KlineChart({ tsCode, basePrice }: { tsCode: string; basePrice: number }
         )}
       </div>
 
-      {/* 分时图 */}
       {isIntraday && (
         <div className="bg-slate-900 rounded-xl p-3">
           <ResponsiveContainer width="100%" height={200}>
@@ -722,7 +809,6 @@ function KlineChart({ tsCode, basePrice }: { tsCode: string; basePrice: number }
         </div>
       )}
 
-      {/* K线图（用折线+柱状图模拟蜡烛图效果） */}
       {!isIntraday && (
         <div className="bg-slate-900 rounded-xl p-3">
           <ResponsiveContainer width="100%" height={220}>
@@ -738,15 +824,12 @@ function KlineChart({ tsCode, basePrice }: { tsCode: string; basePrice: number }
               <YAxis yAxisId="price" domain={['auto', 'auto']} tick={{ fill: '#94a3b8', fontSize: 10 }} tickLine={false} width={50} />
               <YAxis yAxisId="vol" orientation="right" tick={{ fill: '#94a3b8', fontSize: 10 }} tickLine={false} width={40} />
               <ReTooltip content={<KlineTooltip />} />
-              {/* 成交量柱 */}
               <Bar yAxisId="vol" dataKey="vol" radius={[1, 1, 0, 0]}>
                 {chartData.slice(-60).map((d, i) => (
                   <Cell key={i} fill={d.isUp ? 'rgba(239,68,68,0.4)' : 'rgba(34,197,94,0.4)'} />
                 ))}
               </Bar>
-              {/* 收盘价折线 */}
               <Line yAxisId="price" type="monotone" dataKey="close" stroke="#f59e0b" strokeWidth={1.5} dot={false} />
-              {/* 最高/最低价参考线 */}
               <ReferenceLine yAxisId="price" y={Math.max(...chartData.slice(-60).map(d => d.high))} stroke="rgba(239,68,68,0.3)" strokeDasharray="4 4" />
               <ReferenceLine yAxisId="price" y={Math.min(...chartData.slice(-60).map(d => d.low))} stroke="rgba(34,197,94,0.3)" strokeDasharray="4 4" />
             </ComposedChart>
@@ -757,10 +840,77 @@ function KlineChart({ tsCode, basePrice }: { tsCode: string; basePrice: number }
   );
 }
 
+// ─── 资金流向面板 ─────────────────────────────────────────────────────────────
+function MoneyFlowPanel({ profile }: { profile: ReturnType<typeof genStockProfile> }) {
+  const netFlow = profile.net_mf_amount;
+  const isNetIn = netFlow > 0;
+  const totalBuy = profile.buy_lg_amount + profile.buy_md_amount + profile.buy_sm_amount;
+  const totalSell = profile.sell_lg_amount + profile.sell_md_amount + profile.sell_sm_amount;
+
+  const items = [
+    { label: '大单', buy: profile.buy_lg_amount, sell: profile.sell_lg_amount, color: '#ef4444' },
+    { label: '中单', buy: profile.buy_md_amount, sell: profile.sell_md_amount, color: '#f59e0b' },
+    { label: '小单', buy: profile.buy_sm_amount, sell: profile.sell_sm_amount, color: '#94a3b8' },
+  ];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <DollarSign className="w-4 h-4 text-gray-400" />
+        <span className="text-sm font-semibold text-gray-700">资金流向</span>
+        <span className="text-xs text-gray-400">（Mock · 接库后接 moneyflow 表）</span>
+      </div>
+      {/* 净流入汇总 */}
+      <div className={`rounded-lg p-3 flex items-center justify-between ${isNetIn ? 'bg-red-50 border border-red-100' : 'bg-green-50 border border-green-100'}`}>
+        <span className="text-sm text-gray-600">今日净流入</span>
+        <span className="text-lg font-bold tabular-nums" style={{ color: isNetIn ? UP_COLOR : DOWN_COLOR }}>
+          {isNetIn ? '+' : ''}{fmtAmount(netFlow)}
+        </span>
+      </div>
+      {/* 分类流向 */}
+      <div className="space-y-1.5">
+        {items.map(item => {
+          const net = item.buy - item.sell;
+          const maxVal = Math.max(item.buy, item.sell);
+          return (
+            <div key={item.label} className="bg-gray-50 rounded-lg p-2.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-gray-600">{item.label}</span>
+                <span className="text-xs font-bold tabular-nums" style={{ color: net > 0 ? UP_COLOR : DOWN_COLOR }}>
+                  净{net > 0 ? '流入' : '流出'} {fmtAmount(Math.abs(net))}
+                </span>
+              </div>
+              <div className="flex gap-1 h-2">
+                <div className="flex-1 bg-gray-200 rounded-full overflow-hidden flex justify-end">
+                  <div
+                    className="h-full rounded-full bg-red-400"
+                    style={{ width: `${(item.buy / maxVal) * 100}%` }}
+                  />
+                </div>
+                <div className="flex-1 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-green-400"
+                    style={{ width: `${(item.sell / maxVal) * 100}%` }}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-[10px] text-red-500">买 {fmtAmount(item.buy)}</span>
+                <span className="text-[10px] text-green-600">卖 {fmtAmount(item.sell)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── 个股详情面板 ─────────────────────────────────────────────────────────────
 function StockDetailPanel({ stock, onClose }: { stock: StockMeta; onClose: () => void }) {
   const profile = genStockProfile(stock);
   const basePrice = getStockBasePrice(stock.ts_code);
+  const [activeTab, setActiveTab] = useState<'kline' | 'flow'>('kline');
 
   return (
     <div className="space-y-4">
@@ -771,6 +921,7 @@ function StockDetailPanel({ stock, onClose }: { stock: StockMeta; onClose: () =>
             <h3 className="text-xl font-bold text-gray-900">{stock.name_cn}</h3>
             <span className="text-sm text-gray-400 font-mono">{stock.symbol}</span>
             <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">{stock.market}</span>
+            <span className="text-xs bg-gray-50 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{stock.industry}</span>
           </div>
           <div className="flex items-center gap-3 mt-1">
             <span className="text-3xl font-bold tabular-nums text-gray-900">{profile.close_today.toFixed(2)}</span>
@@ -790,10 +941,10 @@ function StockDetailPanel({ stock, onClose }: { stock: StockMeta; onClose: () =>
         {[
           { label: 'PE(TTM)', value: profile.pe_ttm.toFixed(1) + '倍' },
           { label: 'PB', value: profile.pb.toFixed(2) + '倍' },
+          { label: 'PS(TTM)', value: profile.ps_ttm.toFixed(2) + '倍' },
           { label: '换手率', value: profile.turnover_rate.toFixed(2) + '%' },
           { label: '量比', value: profile.volume_ratio.toFixed(2) },
           { label: '总市值', value: fmtMv(profile.total_mv) },
-          { label: '流通市值', value: fmtMv(profile.circ_mv) },
           { label: '52周高', value: profile.high_52w.toFixed(2) },
           { label: '52周低', value: profile.low_52w.toFixed(2) },
         ].map(item => (
@@ -804,8 +955,25 @@ function StockDetailPanel({ stock, onClose }: { stock: StockMeta; onClose: () =>
         ))}
       </div>
 
-      {/* K线图 */}
-      <KlineChart tsCode={stock.ts_code} basePrice={basePrice} />
+      {/* 标签页切换 */}
+      <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5 w-fit">
+        <button
+          onClick={() => setActiveTab('kline')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-all ${activeTab === 'kline' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <Activity className="w-3.5 h-3.5" /> K线图
+        </button>
+        <button
+          onClick={() => setActiveTab('flow')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-all ${activeTab === 'flow' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <Zap className="w-3.5 h-3.5" /> 资金流向
+        </button>
+      </div>
+
+      {/* 内容区 */}
+      {activeTab === 'kline' && <KlineChart tsCode={stock.ts_code} basePrice={basePrice} />}
+      {activeTab === 'flow' && <MoneyFlowPanel profile={profile} />}
     </div>
   );
 }
@@ -945,11 +1113,9 @@ export default function TopDown() {
           {/* Layer 3: 个股精选 + 个股详情 */}
           {activeLayer === 3 && selectedSector && (
             <div className={`grid gap-6 ${selectedStock ? 'grid-cols-5' : 'grid-cols-1'}`}>
-              {/* 个股列表 */}
               <div className={selectedStock ? 'col-span-2' : 'col-span-1'}>
                 <StockListPanel sector={selectedSector} onSelectStock={handleSelectStock} />
               </div>
-              {/* 个股详情 */}
               {selectedStock && (
                 <div className="col-span-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
                   <StockDetailPanel stock={selectedStock} onClose={handleBackToStockList} />
