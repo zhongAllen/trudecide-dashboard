@@ -2,11 +2,11 @@
  * TopDown.tsx — Top-Down 选股策略
  *
  * 三层递进结构：
- *   Layer 1: 宏观择时（indicator_values + indicator_meta）— Mock
+ *   Layer 1: 宏观择时（indicator_values + index_daily）— 真实数据
  *   Layer 2: 板块轮动（sector_meta + sector_daily）— 真实数据（dc 系统）
  *   Layer 3: 个股精选（sector_stock_map + stock_meta + stock_daily）— 真实数据
  *
- * Layer 1 仍使用 Mock 数据（宏观指标接库待后续完成）。
+ * Layer 1 宏观状态矩阵已接入真实数据（REQ-159），评分规则见 docs/macro_matrix_scoring_rules.md。
  * Layer 2/3 已接入 Supabase 真实数据。
  */
 import { useState, useEffect, useCallback } from 'react';
@@ -36,7 +36,10 @@ import {
 } from '@/data/topdown-mock';
 import {
   fetchSectorList, fetchSectorHistory, fetchSectorStocks,
-  type RealSectorMeta, type RealSectorDaily
+  fetchMacroSnapshot, fetchIndexSnapshot, fetchRealMacroMatrix,
+  type RealSectorMeta, type RealSectorDaily,
+  type MacroIndicatorValue, type IndexDailyBar,
+  type RealMacroMatrix, type RealMatrixCell,
 } from '@/lib/topdown-api';
 
 // ─── 颜色常量 ──────────────────────────────────────────────────────────────────
@@ -176,9 +179,10 @@ function DataQualityBadge({ quality }: { quality: MatrixCell['data_quality'] }) 
   return null;
 }
 
-// ─── 宏观矩阵展开详情面板 ────────────────────────────────────────────────────
+// ─── 宏观矩阵展开详情面板 ────────────────────────────────────────────
+// 支持 Mock 数据（MatrixCell）和真实数据（RealMatrixCell）两种格式
 function CellExpandPanel({ cell, dimension, period }: {
-  cell: MatrixCell;
+  cell: MatrixCell | RealMatrixCell;
   dimension: string;
   period: string;
 }) {
@@ -342,11 +346,28 @@ function CellExpandPanel({ cell, dimension, period }: {
   );
 }
 
-// ─── Layer 1: 宏观状态矩阵面板 ───────────────────────────────────────────────
+// ─── Layer 1: 宏观状态矩阵面板 ──────────────────────────────────────────────
+// 评分规则：每个单元格 score = Σ(因子 raw_score × 权重)，规则详见 docs/macro_matrix_scoring_rules.md
 function MacroPanel({ onNext }: { onNext: () => void }) {
   const [region, setRegion] = useState<MatrixRegion>('CN');
   const [expandedCell, setExpandedCell] = useState<string | null>(null);
-  const matrix: MacroMatrix = region === 'CN' ? MACRO_MATRIX_CN : MACRO_MATRIX_US;
+  // 真实数据矩阵（CN）
+  const [realMatrix, setRealMatrix] = useState<RealMacroMatrix | null>(null);
+  const [matrixLoading, setMatrixLoading] = useState(false);
+  const [matrixError, setMatrixError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (region !== 'CN') return; // US 矩阵暂保留 Mock
+    setMatrixLoading(true);
+    setMatrixError(null);
+    fetchRealMacroMatrix()
+      .then(m => setRealMatrix(m))
+      .catch(e => setMatrixError(e.message))
+      .finally(() => setMatrixLoading(false));
+  }, [region]);
+
+  // 如果 CN 真实数据已加载，使用真实数据；否则回退到 Mock
+  const matrix = (region === 'CN' && realMatrix) ? realMatrix : (region === 'CN' ? MACRO_MATRIX_CN : MACRO_MATRIX_US);
 
   const periods: { key: 'short' | 'mid' | 'long'; label: string; sub: string }[] = [
     { key: 'short', label: '短期', sub: '3-9 个月' },
@@ -355,7 +376,7 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
   ];
 
   const shortScore = matrix.summary.short.score;
-  const isPositive = shortScore >= 60;
+  const isPositive = shortScore >= 60;;
 
   return (
     <div className="space-y-3">
@@ -396,7 +417,19 @@ function MacroPanel({ onNext }: { onNext: () => void }) {
             </button>
           </div>
           <span className="text-xs text-gray-400">快照: {matrix.snapshot_date} 模型: {matrix.model_version}</span>
-          <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">⚠ 测试数据</span>
+          {/* 数据来源标签：加载中 / 真实数据 / 错误 / Mock */}
+          {matrixLoading && (
+            <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded font-medium animate-pulse">计算中...</span>
+          )}
+          {!matrixLoading && matrixError && (
+            <span className="text-[10px] text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded font-medium" title={matrixError}>⚠ 数据异常</span>
+          )}
+          {!matrixLoading && !matrixError && region === 'CN' && realMatrix && (
+            <span className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">✓ 真实数据</span>
+          )}
+          {!matrixLoading && !matrixError && (region === 'US' || !realMatrix) && (
+            <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">⚠ Mock 数据</span>
+          )}
         </div>
       </div>
 
@@ -856,43 +889,91 @@ function calcGarpScore(profile: ReturnType<typeof genStockProfile>, fina: Return
   return { total, profitQuality, growth, valuation, moneyflow };
 }
 
-// ─── Layer 3: 个股精选面板（真实数据） ────────────────────────────────────────────
+// ─── Layer 3: 个股精选面板（真实数据） ──────────────────────────────────────────────────
 
-// 真实数据版 GARP 评分（使用真实字段）
-function calcRealGarpScore(quote: {
-  pct_chg: number; pe_ttm: number | null; pb: number | null;
-  turnover_rate: number | null;
-}, fina: {
-  roe: number | null; grossprofit_margin: number | null;
-  netprofit_yoy: number | null; or_yoy: number | null;
-}, mf: { net_amount: number | null } | null) {
+/**
+ * 真实数据版 GARP 评分（REQ-158 + REQ-159 PE(TTM) null 方案 A）
+ *
+ * PE(TTM) null 处理规则（方案 A）：
+ *   1. 亏损股（roe < 0 或 netprofit_yoy 极低）：估值分项直接给 0 分，并标记 isLoss=true
+ *      理由：亏损股的 PE 无意义（分母为负），不应当作“估值合理”处理
+ *   2. 盈利但 PE 为 null（新股、数据缺失）：用传入的行业中位数 PE 代替，并标记 usedMedianPe=true
+ *      理由：盈利股的 PE 缺失是数据问题，用行业中位数是最小化偏差的合理方案
+ *
+ * 评分权重：盈利质量 30% + 成长性 30% + 估值合理性 25% + 资金关注度 15%
+ */
+function calcRealGarpScore(
+  quote: {
+    pct_chg: number; pe_ttm: number | null; pb: number | null;
+    turnover_rate: number | null;
+  },
+  fina: {
+    roe: number | null; grossprofit_margin: number | null;
+    netprofit_yoy: number | null; or_yoy: number | null;
+  },
+  mf: { net_amount: number | null } | null,
+  /** 行业中位数 PE，用于盈利但 pe_ttm 为 null 的情况 */
+  sectorMedianPe: number = 30
+): {
+  total: number;
+  profitQuality: number;
+  growth: number;
+  valuation: number;
+  moneyflow: number;
+  isLoss: boolean;        // 亏损股标记（估值分项为 0）
+  usedMedianPe: boolean;  // 是否使用了行业中位数 PE 代替
+} {
   const roe = fina.roe ?? 0;
   const gpm = fina.grossprofit_margin ?? 0;
   const npYoy = fina.netprofit_yoy ?? 0;
   const orYoy = fina.or_yoy ?? 0;
-  const pe = quote.pe_ttm ?? 50;
   const pb = quote.pb ?? 3;
   const tr = quote.turnover_rate ?? 1;
   const netAmt = mf?.net_amount ?? 0;
 
+  // ─── 盈利质量（30分）：ROE 15分 + 毛利率 15分 ───
   const roeScore = Math.min(Math.max((roe - 5) / 25 * 15, 0), 15);
   const marginScore = Math.min(Math.max((gpm - 10) / 50 * 15, 0), 15);
   const profitQuality = parseFloat((roeScore + marginScore).toFixed(1));
 
+  // ─── 成长性（30分）：净利润增速 15分 + 营收增速 15分 ───
   const npGrowthScore = Math.min(Math.max((npYoy + 10) / 60 * 15, 0), 15);
   const revGrowthScore = Math.min(Math.max((orYoy + 5) / 40 * 15, 0), 15);
   const growth = parseFloat((npGrowthScore + revGrowthScore).toFixed(1));
 
-  const peScore = Math.min(Math.max((50 - pe) / 35 * 15, 0), 15);
-  const pbScore = Math.min(Math.max((8 - pb) / 6 * 10, 0), 10);
-  const valuation = parseFloat((peScore + pbScore).toFixed(1));
+  // ─── 估值合理性（25分）：PE 15分 + PB 10分 ───
+  // 方案 A 处理：亏损股估值分项为 0，盈利但 PE 缺失用行业中位数
+  const isLoss = roe < 0; // 亏损判断：ROE 为负则认定为亏损股
+  let valuation: number;
+  let usedMedianPe = false;
 
+  if (isLoss) {
+    // 亏损股：估值分项直接给 0 分
+    // 理由：亏损股的 PE 无意义，不应认为估值合理
+    valuation = 0;
+  } else {
+    // 盈利股：判断 PE 是否有效
+    let effectivePe: number;
+    if (quote.pe_ttm !== null && quote.pe_ttm > 0) {
+      effectivePe = quote.pe_ttm; // 正常 PE
+    } else {
+      // PE 为 null 或负数（数据缺失）：用行业中位数
+      effectivePe = sectorMedianPe;
+      usedMedianPe = true;
+    }
+    const peScore = Math.min(Math.max((50 - effectivePe) / 35 * 15, 0), 15);
+    const pbScore = Math.min(Math.max((8 - pb) / 6 * 10, 0), 10);
+    valuation = parseFloat((peScore + pbScore).toFixed(1));
+  }
+
+  // ─── 资金关注度（15分）：大单净流入 10分 + 换手率适中 5分 ───
   const netFlowScore = Math.min(Math.max((netAmt + 1000) / 5000 * 10, 0), 10);
+  // 换手率 1-3% 为最优区间，过低或过高均扭分
   const trScore = tr >= 1 && tr <= 3 ? 5 : tr < 1 ? tr / 1 * 5 : Math.max(5 - (tr - 3) * 0.5, 0);
   const moneyflow = parseFloat((netFlowScore + trScore).toFixed(1));
 
   const total = parseFloat((profitQuality + growth + valuation + moneyflow).toFixed(1));
-  return { total, profitQuality, growth, valuation, moneyflow };
+  return { total, profitQuality, growth, valuation, moneyflow, isLoss, usedMedianPe };
 }
 
 function StockListPanel({ sector, onSelectStock }: {
@@ -922,13 +1003,24 @@ function StockListPanel({ sector, onSelectStock }: {
     }).catch(() => setLoading(false));
   }, [sector.id]);
 
+  // 计算行业中位数 PE（用于 PE(TTM) null 方案 A 中的盈利新股代替）
+  // 只取 pe_ttm > 0 的样本，排除亏损股和数据缺失
+  const validPeList = realStocks
+    .map(s => s.quote.pe_ttm)
+    .filter((pe): pe is number => pe !== null && pe > 0 && pe < 500)
+    .sort((a, b) => a - b);
+  const sectorMedianPe = validPeList.length > 0
+    ? validPeList[Math.floor(validPeList.length / 2)]
+    : 30; // 无数据时用 30 倍作为默认中位数
+
   // 构建评分数据
   const scored = realStocks.map(({ meta, quote, fina, moneyflow }) => ({
     meta,
     quote,
     fina,
     moneyflow,
-    garp: calcRealGarpScore(quote, fina, moneyflow),
+    // 传入行业中位数 PE，实施方案 A
+    garp: calcRealGarpScore(quote, fina, moneyflow, sectorMedianPe),
   }));
 
   const sorted = [...scored]
@@ -1149,8 +1241,17 @@ function StockListPanel({ sector, onSelectStock }: {
                         {fmtPct(quote.pct_chg)}
                       </span>
                     </div>
-                    <div className="text-right text-sm text-gray-600 tabular-nums">
-                      {quote.pe_ttm != null ? quote.pe_ttm.toFixed(1) : '-'}
+                    {/* PE(TTM) 显示：方案 A 标注亏损和中位数代替 */}
+                    <div className="text-right text-sm tabular-nums">
+                      {garp.isLoss ? (
+                        <span className="text-[10px] font-medium px-1 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">亏损</span>
+                      ) : garp.usedMedianPe ? (
+                        <span className="text-gray-400" title={`PE 数据缺失，已用行业中位数 ${sectorMedianPe.toFixed(1)}倍代替`}>
+                          ~{sectorMedianPe.toFixed(0)}<span className="text-[9px] text-gray-300">≈</span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-600">{quote.pe_ttm != null ? quote.pe_ttm.toFixed(1) : '-'}</span>
+                      )}
                     </div>
                     <div className="text-right text-sm tabular-nums" style={{ color: roe >= 15 ? '#ef4444' : roe >= 8 ? '#f97316' : '#94a3b8' }}>
                       {roe.toFixed(1)}
@@ -1191,6 +1292,17 @@ function StockListPanel({ sector, onSelectStock }: {
                       <div className="mt-1.5 text-[9px] text-gray-400">
                         综合得分 = {garp.profitQuality}（盈利质量）+ {garp.growth}（成长性）+ {garp.valuation}（估值）+ {garp.moneyflow}（资金）= <strong>{garp.total}</strong>
                       </div>
+                      {/* PE(TTM) null 方案 A 注释 */}
+                      {garp.isLoss && (
+                        <div className="mt-1 text-[9px] text-red-500 bg-red-50 rounded px-1.5 py-1">
+                          ⚠ 亏损股：ROE &lt; 0，PE(TTM) 无意义，估值分项已给 0 分（方案 A）
+                        </div>
+                      )}
+                      {garp.usedMedianPe && !garp.isLoss && (
+                        <div className="mt-1 text-[9px] text-amber-600 bg-amber-50 rounded px-1.5 py-1">
+                          ℹ PE(TTM) 数据缺失，已用当前板块中位数 PE（{sectorMedianPe.toFixed(1)}倍）代替计算估值分（方案 A）
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
