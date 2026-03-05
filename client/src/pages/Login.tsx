@@ -107,14 +107,12 @@ export default function Login() {
           playsInline
           className="absolute top-1/2 left-1/2 min-w-full min-h-full w-auto h-auto -translate-x-1/2 -translate-y-1/2 object-cover"
         >
-          {/* 本地视频 - 开发测试 */}
-          <source src="/videos/earth.mp4" type="video/mp4" />
-          {/* Pexels 在线视频 - 部署用 */}
+          {/* 主视频源 - Pexels 地球旋转 */}
           <source
             src="https://videos.pexels.com/video-files/11892851/11892851-hd_1280_720_24fps.mp4"
             type="video/mp4"
           />
-          {/* 备用视频源 */}
+          {/* 备用视频源 - Pexels 太空视角 */}
           <source
             src="https://videos.pexels.com/video-files/857251/857251-hd_1920_1080_25fps.mp4"
             type="video/mp4"
