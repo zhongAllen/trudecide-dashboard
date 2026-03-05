@@ -4,27 +4,85 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import Knowledge from "@/pages/Knowledge";
 import DataAdmin from "@/pages/DataAdmin";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import TopDown from "./pages/TopDown";
 import Dashboard from "./pages/Dashboard";
 import Holdings from "./pages/Holdings";
+import Login from "./pages/Login";
+import { AuthProvider, useAuth } from "./components/auth/AuthProvider";
+import { ProtectedRoute } from "./components/auth/ProtectedRoute";
+
+// 受保护的路由包装器
+function ProtectedPage({ children }: { children: React.ReactNode }) {
+  return <ProtectedRoute>{children}</ProtectedRoute>;
+}
+
+// 登录页路由 - 已登录则跳转
+function LoginRoute() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+
+  if (user) {
+    setLocation('/');
+    return null;
+  }
+
+  return <Login />;
+}
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/dashboard/holdings" component={Holdings} />
-      <Route path="/macro" component={Home} />
-      <Route path="/knowledge" component={Knowledge} />
-      <Route path="/knowledge/:id" component={Knowledge} />
-      <Route path="/admin/data" component={DataAdmin} />
-      <Route path="/topdown" component={TopDown} />
+      {/* 登录页 - 公开访问 */}
+      <Route path="/login" component={LoginRoute} />
+
+      {/* 受保护的路由 */}
+      <Route path="/">
+        <ProtectedPage>
+          <Dashboard />
+        </ProtectedPage>
+      </Route>
+      <Route path="/dashboard">
+        <ProtectedPage>
+          <Dashboard />
+        </ProtectedPage>
+      </Route>
+      <Route path="/dashboard/holdings">
+        <ProtectedPage>
+          <Holdings />
+        </ProtectedPage>
+      </Route>
+      <Route path="/macro">
+        <ProtectedPage>
+          <Home />
+        </ProtectedPage>
+      </Route>
+      <Route path="/knowledge">
+        <ProtectedPage>
+          <Knowledge />
+        </ProtectedPage>
+      </Route>
+      <Route path="/knowledge/:id">
+        <ProtectedPage>
+          <Knowledge />
+        </ProtectedPage>
+      </Route>
+      <Route path="/admin/data">
+        <ProtectedPage>
+          <DataAdmin />
+        </ProtectedPage>
+      </Route>
+      <Route path="/topdown">
+        <ProtectedPage>
+          <TopDown />
+        </ProtectedPage>
+      </Route>
+
+      {/* 404 */}
       <Route path="/404" component={NotFound} />
-      {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
   );
@@ -40,14 +98,14 @@ function App() {
   return (
     <HelmetProvider>
       <ErrorBoundary>
-        <ThemeProvider
-          defaultTheme="light"
-        >
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </ThemeProvider>
+        <AuthProvider>
+          <ThemeProvider defaultTheme="light">
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+            </TooltipProvider>
+          </ThemeProvider>
+        </AuthProvider>
       </ErrorBoundary>
     </HelmetProvider>
   );
