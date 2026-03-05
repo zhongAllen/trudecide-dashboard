@@ -6,7 +6,15 @@
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
+      ]
+    }
+  ]
 }
