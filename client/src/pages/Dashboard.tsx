@@ -246,6 +246,7 @@ export default function Dashboard() {
   const [globalIndices, setGlobalIndices] = useState<Record<string, GlobalIndex>>({});
   const [areaStats, setAreaStats] = useState<AreaStat[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [flashNews, setFlashNews] = useState<NewsItem[]>([]);
   const [configIndicatorIds, setConfigIndicatorIds] = useState<string[]>(DEFAULT_INDICATOR_IDS);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string>('');
@@ -403,7 +404,7 @@ export default function Dashboard() {
     setAreaStats(stats);
   }, []);
 
-  // ─── 加载新闻 ───
+  // ─── 加载新闻联播 ───
   const loadNews = useCallback(async () => {
     const { data } = await supabase
       .from('cctv_news')
@@ -411,6 +412,20 @@ export default function Dashboard() {
       .order('date', { ascending: false })
       .limit(20);
     setNews((data || []).map(r => ({ date: r.date, title: r.title, content: r.content })));
+  }, []);
+
+  // ─── 加载实时财经新闻（AI摘要源） ───
+  const loadFlashNews = useCallback(async () => {
+    const { data } = await supabase
+      .from('news')
+      .select('pub_time, title, source')
+      .order('pub_time', { ascending: false })
+      .limit(30);
+    setFlashNews((data || []).map(r => ({
+      pub_time: r.pub_time,
+      title: r.title,
+      src: r.source || '财经快讯'
+    })));
   }, []);
 
   // ─── 初始化加载 ───
@@ -422,6 +437,7 @@ export default function Dashboard() {
       loadGlobalIndices(),
       loadAreaStats(),
       loadNews(),
+      loadFlashNews(),
     ]);
     const holdingsData = await loadHoldings();
     if (holdingsData.length > 0) {
@@ -429,7 +445,7 @@ export default function Dashboard() {
     }
     setLoading(false);
     setLastUpdated(new Date().toLocaleTimeString('zh-CN'));
-  }, [loadConfig, loadIndicatorMetas, loadGlobalIndices, loadAreaStats, loadNews, loadHoldings, loadStockPrices]);
+  }, [loadConfig, loadIndicatorMetas, loadGlobalIndices, loadAreaStats, loadNews, loadFlashNews, loadHoldings, loadStockPrices]);
 
   useEffect(() => {
     loadAll();
@@ -961,30 +977,36 @@ export default function Dashboard() {
                 )}
               </div>
             ) : (
-              /* AI 摘要（DEMO Mock） */
+              /* 实时财经快讯 */
               <div className="space-y-3">
                 <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge className="bg-blue-600 text-white text-xs">AI 摘要</Badge>
-                    <span className="text-xs text-gray-400">2026-03-02 · ⚠ 测试数据，接 AI Agent 后替换</span>
+                    <Badge className="bg-blue-600 text-white text-xs">实时快讯</Badge>
+                    <span className="text-xs text-gray-400">
+                      {flashNews.length > 0 && flashNews[0].pub_time
+                        ? new Date(flashNews[0].pub_time).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                        : '—'} · 来自新闻数据库
+                    </span>
                   </div>
-                  <p className="text-sm font-semibold text-gray-800 mb-2">今日最重要的 3 件事</p>
-                  <div className="space-y-2">
-                    {[
-                      { tag: '宏观', color: 'bg-red-100 text-red-700', text: '美联储官员暗示 3 月不降息，美股承压回调，标普500跌0.04%，道指跌0.15%' },
-                      { tag: '政策', color: 'bg-orange-100 text-orange-700', text: '国务院发布《2026年政府工作报告》，GDP目标5%，重点支持新质生产力、消费刺激' },
-                      { tag: '市场', color: 'bg-green-100 text-green-700', text: 'A股沪深300收涨0.39%，北向资金净流入12亿，半导体板块领涨，白酒板块分化' },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <Badge className={`${item.color} border-0 text-xs flex-shrink-0`}>{item.tag}</Badge>
-                        <p className="text-sm text-gray-700">{item.text}</p>
-                      </div>
-                    ))}
+                  <p className="text-sm font-semibold text-gray-800 mb-2">最新市场动态</p>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                    {flashNews.length === 0 ? (
+                      <div className="text-sm text-gray-400 py-2">暂无实时新闻</div>
+                    ) : (
+                      flashNews.slice(0, 8).map((item, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <Badge className="bg-gray-100 text-gray-600 border-0 text-xs flex-shrink-0">
+                            {item.src || '快讯'}
+                          </Badge>
+                          <p className="text-sm text-gray-700 line-clamp-2">{item.title}</p>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <AlertTriangle size={12} />
-                  <span>AI 摘要功能开发中，接入 AI Agent 后将自动从新闻数据库提炼重要事件</span>
+                  <Newspaper size={12} />
+                  <span>实时采集自多个财经数据源，每日更新</span>
                 </div>
               </div>
             )}
