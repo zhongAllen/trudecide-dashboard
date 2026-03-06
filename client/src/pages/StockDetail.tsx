@@ -98,7 +98,26 @@ interface StockHolder {
 }
 
 interface CompanyInfo {
+  // 基础信息（来自 stock_basic）
+  ts_code: string;
+  symbol: string;
+  name: string;
+  fullname: string;
+  enname: string;
+  cnspell: string;
+  area: string;
+  industry: string;
+  market: string;
+  exchange: string;
+  list_status: string;
+  list_date: string;
+  delist_date: string;
+  is_hs: string;
+  act_name: string;
+  act_ent_type: string;
+  // 工商信息（来自 stock_company）
   com_name: string;
+  com_id: string;
   chairman: string;
   manager: string;
   secretary: string;
@@ -113,6 +132,18 @@ interface CompanyInfo {
   employees: number;
   main_business: string;
   business_scope: string;
+}
+
+// 管理层信息
+interface CompanyManager {
+  name: string;
+  gender: string;
+  edu: string;
+  national: string;
+  birthday: string;
+  begin_date: string;
+  end_date: string;
+  resume: string;
 }
 
 interface CompanyAIAnalysis {
@@ -609,6 +640,7 @@ function HoldersPanel({ tsCode }: { tsCode: string }) {
 function CompanyProfilePanel({ tsCode }: { tsCode: string }) {
   const [data, setData] = useState<CompanyInfo | null>(null);
   const [aiData, setAiData] = useState<CompanyAIAnalysis | null>(null);
+  const [managers, setManagers] = useState<CompanyManager[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -627,8 +659,17 @@ function CompanyProfilePanel({ tsCode }: { tsCode: string }) {
         .eq('ts_code', tsCode)
         .maybeSingle();
       
+      // 获取管理层信息
+      const { data: managersData } = await supabase
+        .from('stock_company_managers')
+        .select('*')
+        .eq('ts_code', tsCode)
+        .order('begin_date', { ascending: false })
+        .limit(10);
+      
       setData(companyData);
       setAiData(aiAnalysis);
+      setManagers(managersData || []);
       setLoading(false);
     }
     fetchData();
@@ -642,15 +683,49 @@ function CompanyProfilePanel({ tsCode }: { tsCode: string }) {
       <div>
         <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
           <Building2 size={16} /> 公司基本信息
+          {data?.industry && (
+            <Badge variant="secondary" className="text-xs">{data.industry}</Badge>
+          )}
         </h4>
         {data ? (
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div><span className="text-gray-500">公司全称：</span>{data.com_name || '--'}</div>
-            <div><span className="text-gray-500">成立日期：</span>{data.setup_date || '--'}</div>
-            <div><span className="text-gray-500">注册资本：</span>{data.reg_capital ? fmtMoney(data.reg_capital) : '--'}</div>
-            <div><span className="text-gray-500">员工人数：</span>{data.employees ? `${data.employees}人` : '--'}</div>
-            <div><span className="text-gray-500">注册地址：</span>{data.province}{data.city}</div>
-            <div><span className="text-gray-500">办公地址：</span>{data.office || '--'}</div>
+          <div className="space-y-4">
+            {/* 核心信息 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div><span className="text-gray-500">股票名称：</span>{data.name || '--'}</div>
+              <div><span className="text-gray-500">股票代码：</span>{data.symbol || '--'}</div>
+              <div><span className="text-gray-500">市场类型：</span>{data.market || '--'}</div>
+              <div><span className="text-gray-500">所属行业：</span>{data.industry || '--'}</div>
+            </div>
+            
+            {/* 上市信息 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div><span className="text-gray-500">上市日期：</span>{data.list_date || '--'}</div>
+              <div><span className="text-gray-500">交易所：</span>{data.exchange || '--'}</div>
+              <div><span className="text-gray-500">上市状态：</span>{data.list_status === 'L' ? '上市' : data.list_status || '--'}</div>
+              <div><span className="text-gray-500">沪深港通：</span>{data.is_hs === 'N' ? '否' : data.is_hs || '--'}</div>
+            </div>
+            
+            {/* 工商信息 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div><span className="text-gray-500">公司全称：</span>{data.com_name || '--'}</div>
+              <div><span className="text-gray-500">成立日期：</span>{data.setup_date || '--'}</div>
+              <div><span className="text-gray-500">注册资本：</span>{data.reg_capital ? fmtMoney(data.reg_capital) : '--'}</div>
+              <div><span className="text-gray-500">员工人数：</span>{data.employees ? `${data.employees}人` : '--'}</div>
+            </div>
+            
+            {/* 地址信息 */}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><span className="text-gray-500">注册地址：</span>{data.province}{data.city}</div>
+              <div><span className="text-gray-500">办公地址：</span>{data.office || '--'}</div>
+            </div>
+            
+            {/* 实控人信息 */}
+            {(data.act_name || data.act_ent_type) && (
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-gray-500">实控人：</span>{data.act_name || '--'}</div>
+                <div><span className="text-gray-500">企业性质：</span>{data.act_ent_type || '--'}</div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-gray-400 text-sm">暂无数据</div>
@@ -707,33 +782,83 @@ function CompanyProfilePanel({ tsCode }: { tsCode: string }) {
       )}
 
       {/* 管理层 */}
-      {data && (data.chairman || data.manager || data.secretary) && (
+      {(data?.chairman || data?.manager || data?.secretary || managers.length > 0) && (
         <div>
           <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
             <User size={16} /> 管理层
           </h4>
-          <div className="grid grid-cols-3 gap-3 text-sm">
-            {data.chairman && (
-              <div className="bg-gray-50 p-3 rounded-lg text-center">
-                <div className="text-gray-500 text-xs">董事长</div>
-                <div className="font-medium">{data.chairman}</div>
+          
+          {/* 核心管理层（来自 stock_company） */}
+          {(data?.chairman || data?.manager || data?.secretary) && (
+            <div className="grid grid-cols-3 gap-3 text-sm mb-4">
+              {data.chairman && (
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <div className="text-gray-500 text-xs">董事长</div>
+                  <div className="font-medium">{data.chairman}</div>
+                </div>
+              )}
+              {data.manager && (
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <div className="text-gray-500 text-xs">总经理</div>
+                  <div className="font-medium">{data.manager}</div>
+                </div>
+              )}
+              {data.secretary && (
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <div className="text-gray-500 text-xs">董秘</div>
+                  <div className="font-medium">{data.secretary}</div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* 详细管理层列表（来自 stock_company_managers） */}
+          {managers.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs text-gray-500 mb-2">高管团队详情</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {managers.map((manager, idx) => (
+                  <div key={idx} className="bg-gray-50 p-3 rounded-lg text-sm">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="font-medium">{manager.name}</span>
+                        {manager.edu && (
+                          <span className="text-xs text-gray-500 ml-2">{manager.edu}</span>
+                        )}
+                      </div>
+                      {manager.begin_date && (
+                        <span className="text-xs text-gray-400">
+                          上任: {manager.begin_date}
+                        </span>
+                      )}
+                    </div>
+                    {manager.resume && (
+                      <div className="text-xs text-gray-600 mt-1 line-clamp-2">
+                        {manager.resume}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            )}
-            {data.manager && (
-              <div className="bg-gray-50 p-3 rounded-lg text-center">
-                <div className="text-gray-500 text-xs">总经理</div>
-                <div className="font-medium">{data.manager}</div>
-              </div>
-            )}
-            {data.secretary && (
-              <div className="bg-gray-50 p-3 rounded-lg text-center">
-                <div className="text-gray-500 text-xs">董秘</div>
-                <div className="font-medium">{data.secretary}</div>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
+
+      {/* 数据来源标注 */}
+      <div className="flex items-center gap-4 text-xs text-gray-400 border-t pt-4">
+        <span>数据来源：</span>
+        <span className="flex items-center gap-1">
+          <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+          Tushare Pro
+        </span>
+        {aiData && (
+          <span className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-purple-400"></div>
+            AI 深度分析
+          </span>
+        )}
+      </div>
 
       {/* AI 分析部分 */}
       <div className="border-t pt-6 mt-6">

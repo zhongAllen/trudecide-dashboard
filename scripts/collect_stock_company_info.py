@@ -1,19 +1,24 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-REQ-160: 上市公司基本信息采集脚本
-====================================
-从 Tushare Pro 的 `stock_company` 接口采集上市公司基本信息，
+REQ-170: 上市公司公司画像数据采集脚本
+======================================
+从 Tushare Pro 的 `stock_basic` + `stock_company` 接口采集上市公司完整信息，
 并存入 `stock_company_info` 表。
 
 接口说明：
-  - 接口名：stock_company
-  - 积分要求：120 分（最低门槛）
-  - 单次最大：4500 条，按交易所（SSE/SZSE/BSE）分批提取
-  - 数据特点：静态数据，全量采集一次，建议每月更新一次
+  - stock_basic: 股票基础信息（2000积分）
+    - 字段: ts_code, symbol, name, fullname, enname, cnspell, area, industry,
+            market, exchange, list_status, list_date, delist_date, is_hs,
+            act_name, act_ent_type
+  - stock_company: 公司工商信息（120积分）
+    - 字段: com_name, com_id, exchange, chairman, manager, secretary,
+            reg_capital, setup_date, province, city, introduction, website,
+            email, office, employees, main_business, business_scope
 
 更新策略：
   - UPSERT（ON CONFLICT ts_code DO UPDATE），保留最新值
+  - 先采集 stock_basic 全量数据，再合并 stock_company 数据
 
 四段式结构（REQ-078/079 规范）：
   1. 初始化上下文
@@ -27,6 +32,7 @@ REQ-160: 上市公司基本信息采集脚本
   python collect_stock_company_info.py --exchange SSE  # 只采集上交所
 
 变更记录：
+  v3.0 (REQ-170): 扩展采集 stock_basic 字段，完善公司画像数据
   v2.0 (REQ-160): 重构为四段式规范，使用 collect_helper + Supabase 客户端
   v1.0 (REQ-152): 初始版本（已废弃，使用 SQLAlchemy + 逐股采集，效率低）
 """
@@ -50,7 +56,15 @@ EXCHANGES   = ["SSE", "SZSE", "BSE"]   # 上交所、深交所、北交所
 API_SLEEP   = 0.5                       # 接口调用间隔（秒）
 
 # Tushare 接口请求字段
-TS_FIELDS = (
+# stock_basic 字段
+TS_BASIC_FIELDS = (
+    "ts_code,symbol,name,fullname,enname,cnspell,area,industry,"
+    "market,exchange,list_status,list_date,delist_date,is_hs,"
+    "act_name,act_ent_type"
+)
+
+# stock_company 字段
+TS_COMPANY_FIELDS = (
     "ts_code,com_name,com_id,exchange,chairman,manager,secretary,"
     "reg_capital,setup_date,province,city,introduction,website,"
     "email,office,employees,main_business,business_scope"
@@ -82,8 +96,9 @@ def clean_row(row: dict) -> dict:
         # 处理 NaN
         if isinstance(val, float) and pd.isna(val):
             val = None
-        # setup_date: YYYYMMDD -> YYYY-MM-DD
-        if key == "setup_date" and val and isinstance(val, str) and len(val) == 8:
+        # 日期字段: YYYYMMDD -> YYYY-MM-DD
+        date_fields = ["setup_date", "list_date", "delist_date"]
+        if key in date_fields and val and isinstance(val, str) and len(val) == 8:
             val = f"{val[:4]}-{val[4:6]}-{val[6:]}"
         # 数值类型保护
         if key == "reg_capital" and val is not None:
@@ -101,13 +116,31 @@ def clean_row(row: dict) -> dict:
     return cleaned
 
 
-# ── 采集单个交易所 ─────────────────────────────────────────────────────────────
-def collect_one_exchange(pro, exchange: str) -> pd.DataFrame:
-    """采集单个交易所的全量公司基本信息，含一次重试"""
-    print(f"  [INFO] 采集 {exchange} 交易所...", flush=True)
+# ── 采集 stock_basic（全市场）───────────────────────────────────────────────────
+def collect_stock_basic(pro) -> pd.DataFrame:
+    """采集全市场股票基础信息"""
+    print("  [INFO] 采集 stock_basic 全市场数据...", flush=True)
     for attempt in range(2):
         try:
-            df = pro.stock_company(exchange=exchange, fields=TS_FIELDS)
+            df = pro.stock_basic(exchange='', list_status='L', fields=TS_BASIC_FIELDS)
+            print(f"  [INFO] stock_basic: {len(df)} 条", flush=True)
+            return df
+        except Exception as e:
+            if attempt == 0:
+                print(f"  [WARN] stock_basic 失败: {e}，60s 后重试...", flush=True)
+                time.sleep(60)
+            else:
+                print(f"  [ERROR] stock_basic 重试失败: {e}", flush=True)
+    return pd.DataFrame()
+
+
+# ── 采集 stock_company（按交易所）───────────────────────────────────────────────
+def collect_one_exchange(pro, exchange: str) -> pd.DataFrame:
+    """采集单个交易所的公司工商信息，含一次重试"""
+    print(f"  [INFO] 采集 {exchange} 交易所 stock_company...", flush=True)
+    for attempt in range(2):
+        try:
+            df = pro.stock_company(exchange=exchange, fields=TS_COMPANY_FIELDS)
             print(f"  [INFO] {exchange}: {len(df)} 条", flush=True)
             return df
         except Exception as e:
@@ -146,7 +179,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("REQ-160: stock_company_info 采集开始")
+    print("REQ-170: stock_company_info 采集开始")
     print(f"  交易所: {args.exchange}  dry-run: {args.dry_run}")
     print("=" * 60)
 
@@ -161,27 +194,45 @@ def main():
         # ── 第三段：执行采集 ──
         pro, sb = make_clients()
 
+        # 1. 采集 stock_basic（全市场）
+        df_basic = collect_stock_basic(pro)
+        if df_basic.empty:
+            raise ValueError("stock_basic 采集失败")
+        time.sleep(API_SLEEP)
+
+        # 2. 采集 stock_company（按交易所）
         exchanges_to_collect = EXCHANGES if args.exchange == "all" else [args.exchange]
-        all_dfs = []
+        company_dfs = []
         for exchange in exchanges_to_collect:
             df = collect_one_exchange(pro, exchange)
             if not df.empty:
-                all_dfs.append(df)
+                company_dfs.append(df)
             time.sleep(API_SLEEP)
 
-        if not all_dfs:
-            raise ValueError("所有交易所均未获取到数据")
+        if not company_dfs:
+            raise ValueError("所有交易所 stock_company 均未获取到数据")
 
-        df_all = pd.concat(all_dfs, ignore_index=True)
-        print(f"\n[INFO] 合计 {len(df_all)} 条公司信息", flush=True)
+        df_company = pd.concat(company_dfs, ignore_index=True)
+        print(f"\n[INFO] stock_basic: {len(df_basic)} 条, stock_company: {len(df_company)} 条", flush=True)
+
+        # 3. 合并数据（以 stock_basic 为基准，左连接 stock_company）
+        df_merged = df_basic.merge(df_company, on="ts_code", how="left", suffixes=("", "_company"))
+
+        # 处理冲突字段（exchange 在两张表中都存在，优先使用 stock_company 的）
+        if "exchange_company" in df_merged.columns:
+            df_merged["exchange"] = df_merged["exchange_company"].fillna(df_merged["exchange"])
+            df_merged = df_merged.drop(columns=["exchange_company"])
+
+        print(f"[INFO] 合并后共 {len(df_merged)} 条记录", flush=True)
 
         # 清洗数据
-        rows = [clean_row(row) for row in df_all.to_dict("records")]
+        rows = [clean_row(row) for row in df_merged.to_dict("records")]
 
         if args.dry_run:
             print("\n[DRY-RUN] 前 3 条数据预览：")
             for r in rows[:3]:
-                print(f"  {r['ts_code']} | {r.get('com_name')} | 董事长:{r.get('chairman')} | "
+                print(f"  {r['ts_code']} | {r.get('name')} | {r.get('com_name')} | "
+                      f"行业:{r.get('industry')} | 董事长:{r.get('chairman')} | "
                       f"员工:{r.get('employees')} | 官网:{r.get('website')}")
             print(f"[DRY-RUN] 共 {len(rows)} 条，不写入数据库")
             log_success(context, len(rows))
@@ -197,7 +248,7 @@ def main():
         log_failure(context, e)
         sys.exit(1)
 
-    print("\n🎉 REQ-160: stock_company_info 采集完成")
+    print("\n🎉 REQ-170: stock_company_info 采集完成")
 
 
 if __name__ == "__main__":
