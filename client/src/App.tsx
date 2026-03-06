@@ -11,6 +11,7 @@ import Home from "./pages/Home";
 import TopDown from "./pages/TopDown";
 import Dashboard from "./pages/Dashboard";
 import Holdings from "./pages/Holdings";
+import StockDetail from "./pages/StockDetail";
 import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./components/auth/AuthProvider";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
@@ -78,6 +79,11 @@ function Router() {
       <Route path="/topdown">
         <ProtectedPage>
           <TopDown />
+        </ProtectedPage>
+      </Route>
+      <Route path="/stock/:ts_code">
+        <ProtectedPage>
+          <StockDetail />
         </ProtectedPage>
       </Route>
 

@@ -788,7 +788,7 @@ export default function Dashboard() {
                       {holdingSummary.map(h => (
                         <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="px-4 py-2.5">
-                            <Link href={`/topdown?stock=${h.ts_code}`}>
+                            <Link href={`/stock/${h.ts_code}?from=dashboard`}>
                               <div className="cursor-pointer group">
                                 <div className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">{h.name_cn || h.ts_code}</div>
                                 <div className="text-gray-400 group-hover:text-blue-400 transition-colors">{h.ts_code}</div>
