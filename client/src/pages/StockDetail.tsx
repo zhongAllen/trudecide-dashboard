@@ -52,6 +52,14 @@ interface StockDaily {
 interface StockWeekly extends StockDaily {}
 interface StockMonthly extends StockDaily {}
 
+// 图表展示用的扩展类型
+interface ChartData extends StockDaily {
+  date: string;
+  fullDate: string;
+  isUp: boolean;
+  amplitude: string;
+}
+
 interface StockDailyBasic {
   trade_date: string;
   pe_ttm: number;
@@ -208,9 +216,9 @@ function pctBg(v: number) {
 
 // ─── 专业K线图组件 ────────────────────────────────────────────────────────────
 function ProfessionalKlineChart({ data, period }: { data: StockDaily[]; period: 'day' | 'week' | 'month' }) {
-  const [hoverData, setHoverData] = useState<StockDaily | null>(null);
+  const [hoverData, setHoverData] = useState<ChartData | null>(null);
   
-  const chartData = useMemo(() => {
+  const chartData = useMemo<ChartData[]>(() => {
     return data.map(d => ({
       ...d,
       date: d.trade_date.slice(5), // MM-DD
@@ -924,9 +932,9 @@ function CompanyProfilePanel({ tsCode }: { tsCode: string }) {
 
 // ─── 主页面组件 ──────────────────────────────────────────────────────────────
 export default function StockDetail() {
-  const params = useParams();
+  const params = useParams<{ ts_code: string }>();
   const search = useSearch();
-  const tsCode = params.ts_code;
+  const tsCode = params.ts_code || '';
   const from = new URLSearchParams(search).get('from') || 'dashboard';
 
   const [stock, setStock] = useState<StockMeta | null>(null);
