@@ -47,6 +47,10 @@ interface StockDaily {
   pct_chg: number;
 }
 
+// 周K/月K数据类型（与StockDaily兼容）
+interface StockWeekly extends StockDaily {}
+interface StockMonthly extends StockDaily {}
+
 interface StockDailyBasic {
   trade_date: string;
   pe_ttm: number;
@@ -714,16 +718,6 @@ export default function StockDetail() {
         .single();
       
       setStock(stockData);
-
-      // 获取K线数据
-      const { data: dailyData } = await supabase
-        .from('stock_daily')
-        .select('trade_date, open, high, low, close, vol, amount, pct_chg')
-        .eq('ts_code', tsCode)
-        .order('trade_date', { ascending: false })
-        .limit(120);
-      
-      setKlineData(dailyData || []);
       setLoading(false);
     }
     
@@ -731,6 +725,41 @@ export default function StockDetail() {
       fetchData();
     }
   }, [tsCode]);
+
+  // 根据周期获取K线数据
+  useEffect(() => {
+    async function fetchKlineData() {
+      if (!tsCode) return;
+      
+      let tableName = 'stock_daily';
+      let limit = 120;
+      
+      switch (klinePeriod) {
+        case 'week':
+          tableName = 'stock_weekly';
+          limit = 52; // 52周
+          break;
+        case 'month':
+          tableName = 'stock_monthly';
+          limit = 24; // 24个月
+          break;
+        default:
+          tableName = 'stock_daily';
+          limit = 120; // 120天
+      }
+      
+      const { data } = await supabase
+        .from(tableName)
+        .select('trade_date, open, high, low, close, vol, amount, pct_chg')
+        .eq('ts_code', tsCode)
+        .order('trade_date', { ascending: false })
+        .limit(limit);
+      
+      setKlineData(data || []);
+    }
+    
+    fetchKlineData();
+  }, [tsCode, klinePeriod]);
 
   // 返回路径
   const backPath = from === 'topdown' ? '/topdown' : '/dashboard';
