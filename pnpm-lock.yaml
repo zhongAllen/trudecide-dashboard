@@ -127,6 +127,9 @@ importers:
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      klinecharts:
+        specifier: ^10.0.0-beta1
+        version: 10.0.0-beta1
       lightweight-charts:
         specifier: 4.2.2
         version: 4.2.2
@@ -2614,6 +2617,9 @@ packages:
 
   khroma@2.1.0:
     resolution: {integrity: sha512-Ls993zuzfayK269Svk9hzpeGUKob/sIgZzyHYdjQoAdQetRKpOLj+k/QQQ/6Qi0Yz65mlROrfd+Ev+1+7dz9Kw==}
+
+  klinecharts@10.0.0-beta1:
+    resolution: {integrity: sha512-5ZxFGjJeZqt9+q45lZDhApC3kdgrk51i27uSpIELgXJLNgfSc0anlb8XkU+52LVrBYnTv9dFr8/Q7lG81vIV1w==}
 
   kolorist@1.8.0:
     resolution: {integrity: sha512-Y+60/zizpJ3HRH8DCss+q95yr6145JXZo46OTpFvDZWLfRCE4qChOyk1b26nMaNpfHHgxagk9dXT5OP0Tfe+dQ==}
@@ -6110,6 +6116,8 @@ snapshots:
       commander: 8.3.0
 
   khroma@2.1.0: {}
+
+  klinecharts@10.0.0-beta1: {}
 
   kolorist@1.8.0: {}
 
