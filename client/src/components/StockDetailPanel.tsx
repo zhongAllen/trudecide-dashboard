@@ -260,10 +260,43 @@ function aggregateMonthlyData(dailyData: StockDaily[]): StockDaily[] {
   );
 }
 
+// ─── 从日K数据聚合年K数据 ────────────────────────────────────────────────────────
+function aggregateYearlyData(dailyData: StockDaily[]): StockDaily[] {
+  const yearlyMap = new Map<string, StockDaily>();
+
+  dailyData.forEach((day) => {
+    const yearKey = day.trade_date.substring(0, 4) + '-01-01'; // YYYY-01-01
+
+    if (!yearlyMap.has(yearKey)) {
+      yearlyMap.set(yearKey, {
+        trade_date: yearKey,
+        open: day.open,
+        high: day.high,
+        low: day.low,
+        close: day.close,
+        vol: day.vol,
+        amount: day.amount,
+        pct_chg: day.pct_chg,
+      });
+    } else {
+      const year = yearlyMap.get(yearKey)!;
+      year.high = Math.max(year.high, day.high);
+      year.low = Math.min(year.low, day.low);
+      year.close = day.close;
+      year.vol += day.vol;
+      year.amount += day.amount;
+    }
+  });
+
+  return Array.from(yearlyMap.values()).sort((a, b) =>
+    a.trade_date.localeCompare(b.trade_date)
+  );
+}
+
 // ─── K线图面板组件 ─────────────────────────────────────────────────────────────
 function KlineChartPanel({ tsCode }: { tsCode: string }) {
   const [dailyData, setDailyData] = useState<StockDaily[]>([]);
-  const [klinePeriod, setKlinePeriod] = useState<'day' | 'week' | 'month'>('day');
+  const [klinePeriod, setKlinePeriod] = useState<'day' | 'week' | 'month' | 'year'>('day');
   const [loading, setLoading] = useState(true);
   const [realtimeData, setRealtimeData] = useState<{
     current: number;
@@ -276,12 +309,13 @@ function KlineChartPanel({ tsCode }: { tsCode: string }) {
   useEffect(() => {
     async function fetchDailyData() {
       setLoading(true);
+      // 获取更多历史数据用于年K线聚合（最多5年）
       const { data } = await supabase
         .from('stock_daily')
         .select('trade_date, open, high, low, close, vol, amount, pct_chg')
         .eq('ts_code', tsCode)
         .order('trade_date', { ascending: true })
-        .limit(365); // 获取1年的日K数据用于聚合
+        .limit(1500); // 获取约5-6年的日K数据
 
       setDailyData(data || []);
       setLoading(false);
@@ -299,6 +333,8 @@ function KlineChartPanel({ tsCode }: { tsCode: string }) {
         return aggregateWeeklyData(dailyData);
       case 'month':
         return aggregateMonthlyData(dailyData);
+      case 'year':
+        return aggregateYearlyData(dailyData);
       default:
         return dailyData.slice(-120); // 日K显示最近120天
     }
@@ -325,7 +361,7 @@ function KlineChartPanel({ tsCode }: { tsCode: string }) {
       {/* 周期切换和实时行情 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {(['day', 'week', 'month'] as const).map((period) => (
+          {(['day', 'week', 'month', 'year'] as const).map((period) => (
             <button
               key={period}
               onClick={() => setKlinePeriod(period)}
@@ -335,7 +371,7 @@ function KlineChartPanel({ tsCode }: { tsCode: string }) {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {period === 'day' ? '日K' : period === 'week' ? '周K' : '月K'}
+              {period === 'day' ? '日K' : period === 'week' ? '周K' : period === 'month' ? '月K' : '年K'}
             </button>
           ))}
         </div>

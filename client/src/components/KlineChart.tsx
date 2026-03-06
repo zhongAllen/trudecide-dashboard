@@ -82,8 +82,8 @@ export function KlineChart({
           textColor: '#94a3b8', // slate-400
         },
         grid: {
-          vertLines: { color: '#1e293b' }, // slate-800
-          horzLines: { color: '#1e293b' },
+          vertLines: { visible: false },  // 隐藏垂直网格线
+          horzLines: { visible: false },  // 隐藏水平网格线
         },
         crosshair: {
           mode: 1,
