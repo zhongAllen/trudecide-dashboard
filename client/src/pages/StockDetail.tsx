@@ -115,6 +115,16 @@ interface CompanyInfo {
   business_scope: string;
 }
 
+interface CompanyAIAnalysis {
+  moat: string;
+  competitive_advantage: string;
+  risk_factors: string;
+  growth_potential: string;
+  valuation_analysis: string;
+  industry_position: string;
+  ai_analyzed_at: string;
+}
+
 // ─── 颜色常量 ─────────────────────────────────────────────────────────────────
 const UP_COLOR = '#ef4444';
 const DOWN_COLOR = '#22c55e';
@@ -598,17 +608,27 @@ function HoldersPanel({ tsCode }: { tsCode: string }) {
 // ─── 公司画像面板 ────────────────────────────────────────────────────────────
 function CompanyProfilePanel({ tsCode }: { tsCode: string }) {
   const [data, setData] = useState<CompanyInfo | null>(null);
+  const [aiData, setAiData] = useState<CompanyAIAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
+      // 获取基础信息
       const { data: companyData } = await supabase
         .from('stock_company_info')
         .select('*')
         .eq('ts_code', tsCode)
         .single();
       
+      // 获取AI分析
+      const { data: aiAnalysis } = await supabase
+        .from('stock_company_ai_analysis')
+        .select('*')
+        .eq('ts_code', tsCode)
+        .maybeSingle();
+      
       setData(companyData);
+      setAiData(aiAnalysis);
       setLoading(false);
     }
     fetchData();
@@ -714,6 +734,65 @@ function CompanyProfilePanel({ tsCode }: { tsCode: string }) {
           </div>
         </div>
       )}
+
+      {/* AI 分析部分 */}
+      <div className="border-t pt-6 mt-6">
+        <h4 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+          <Activity size={16} className="text-purple-500" /> 
+          AI 智能分析
+          {aiData?.ai_analyzed_at && (
+            <span className="text-xs text-gray-400 font-normal">
+              (分析于 {new Date(aiData.ai_analyzed_at).toLocaleDateString()})
+            </span>
+          )}
+        </h4>
+        
+        {aiData ? (
+          <div className="space-y-4">
+            {aiData.moat && (
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <div className="text-sm font-medium text-purple-700 mb-2">护城河分析</div>
+                <p className="text-sm text-gray-700 leading-relaxed">{aiData.moat}</p>
+              </div>
+            )}
+            {aiData.competitive_advantage && (
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="text-sm font-medium text-blue-700 mb-2">竞争优势</div>
+                <p className="text-sm text-gray-700 leading-relaxed">{aiData.competitive_advantage}</p>
+              </div>
+            )}
+            {aiData.risk_factors && (
+              <div className="bg-red-50 p-4 rounded-lg">
+                <div className="text-sm font-medium text-red-700 mb-2">风险因素</div>
+                <p className="text-sm text-gray-700 leading-relaxed">{aiData.risk_factors}</p>
+              </div>
+            )}
+            {aiData.growth_potential && (
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="text-sm font-medium text-green-700 mb-2">成长潜力</div>
+                <p className="text-sm text-gray-700 leading-relaxed">{aiData.growth_potential}</p>
+              </div>
+            )}
+            {aiData.industry_position && (
+              <div className="bg-orange-50 p-4 rounded-lg">
+                <div className="text-sm font-medium text-orange-700 mb-2">行业地位</div>
+                <p className="text-sm text-gray-700 leading-relaxed">{aiData.industry_position}</p>
+              </div>
+            )}
+            {aiData.valuation_analysis && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-sm font-medium text-gray-700 mb-2">估值分析</div>
+                <p className="text-sm text-gray-700 leading-relaxed">{aiData.valuation_analysis}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-8 bg-gray-50 rounded-lg">
+            <div className="text-gray-400 text-sm mb-2">AI 分析数据待生成</div>
+            <div className="text-xs text-gray-300">系统将自动分析公司基本面、行业地位和风险因素</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
