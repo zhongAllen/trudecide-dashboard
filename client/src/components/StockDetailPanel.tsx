@@ -299,7 +299,7 @@ function FinancialPanel({ tsCode }: { tsCode: string }) {
       console.log('[FinancialPanel] Fetching fina_indicator for:', tsCode);
       
       const { data, error } = await supabase
-        .from('fina_indicator')
+        .from('stock_fina_indicator')
         .select('end_date, roe, debt_to_assets, grossprofit_margin, netprofit_margin, netprofit_yoy, or_yoy')
         .eq('ts_code', tsCode)
         .order('end_date', { ascending: false })
@@ -347,7 +347,7 @@ function FinaTrendPanel({ tsCode }: { tsCode: string }) {
     async function fetchTrend() {
       setLoading(true);
       const { data } = await supabase
-        .from('fina_indicator')
+        .from('stock_fina_indicator')
         .select('end_date, roe, debt_to_assets, grossprofit_margin, netprofit_margin')
         .eq('ts_code', tsCode)
         .order('end_date', { ascending: true })
@@ -471,12 +471,7 @@ function CompanyCanvasPanel({ stock }: { stock: StockMeta }) {
       ]);
 
       setCompanyInfo(info);
-      // 去重：根据 holder_name 去重
-      const uniqueHolders = holderData ? 
-        holderData.filter((item, index, self) => 
-          index === self.findIndex((t) => t.holder_name === item.holder_name)
-        ) : [];
-      setHolders(uniqueHolders);
+      setHolders(holderData || []);
       setAiData(ai);
       setLoading(false);
     }
