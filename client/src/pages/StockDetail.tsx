@@ -24,6 +24,7 @@ import {
   ResponsiveContainer, Cell, ReferenceLine, Area
 } from 'recharts';
 import { supabase } from '@/lib/supabase';
+import TradingViewChart from '@/components/TradingViewChart';
 
 // ─── 类型定义 ─────────────────────────────────────────────────────────────────
 interface StockMeta {
@@ -891,7 +892,10 @@ export default function StockDetail() {
                 </div>
               </CardHeader>
               <CardContent>
-                <ProfessionalKlineChart data={klineData} period={klinePeriod} />
+                <TradingViewChart 
+                  data={klineData} 
+                  period={activeChartTab === 'intraday' ? 'intraday' : klinePeriod} 
+                />
               </CardContent>
             </Card>
 
