@@ -1075,9 +1075,9 @@ export default function StockDetail() {
                 </div>
               </CardHeader>
               <CardContent>
-                <TradingViewChart 
+                <ProfessionalKlineChart 
                   data={klineData} 
-                  period={activeChartTab === 'intraday' ? 'intraday' : klinePeriod} 
+                  period={activeChartTab === 'intraday' ? 'day' : klinePeriod} 
                 />
               </CardContent>
             </Card>
