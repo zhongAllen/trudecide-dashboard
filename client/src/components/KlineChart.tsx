@@ -98,12 +98,23 @@ export function KlineChart({
         },
         rightPriceScale: {
           borderColor: '#334155',
+          scaleMargins: {
+            top: 0.1,
+            bottom: 0.1,
+          },
         },
         timeScale: {
           borderColor: '#334155',
           timeVisible: false,
           secondsVisible: false,
           visible: true,
+          tickMarkFormatter: (time: number) => {
+            const date = new Date(time * 1000);
+            const year = date.getFullYear();
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            return `${year}/${month}/${day}`;
+          },
         },
         handleScroll: false,        // 禁用滚动（拖动）
         handleScale: true,          // 保留缩放

@@ -312,15 +312,32 @@ function KlineChartPanel({ tsCode }: { tsCode: string }) {
   useEffect(() => {
     async function fetchDailyData() {
       setLoading(true);
-      // 获取更多历史数据用于年K线聚合（最多5年）
-      const { data } = await supabase
+      // 先获取最新日期
+      const { data: latestData } = await supabase
         .from('stock_daily')
-        .select('trade_date, open, high, low, close, vol, amount, pct_chg')
+        .select('trade_date')
         .eq('ts_code', tsCode)
-        .order('trade_date', { ascending: true })
-        .limit(1500); // 获取约5-6年的日K数据
+        .order('trade_date', { ascending: false })
+        .limit(1);
+      
+      const latestDate = latestData?.[0]?.trade_date;
+      
+      if (latestDate) {
+        // 获取最近5年的数据
+        const fiveYearsAgo = new Date(latestDate);
+        fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+        
+        const { data } = await supabase
+          .from('stock_daily')
+          .select('trade_date, open, high, low, close, vol, amount, pct_chg')
+          .eq('ts_code', tsCode)
+          .gte('trade_date', fiveYearsAgo.toISOString().split('T')[0])
+          .order('trade_date', { ascending: true });
 
-      setDailyData(data || []);
+        setDailyData(data || []);
+      } else {
+        setDailyData([]);
+      }
       setLoading(false);
     }
 
@@ -333,13 +350,13 @@ function KlineChartPanel({ tsCode }: { tsCode: string }) {
 
     switch (klinePeriod) {
       case 'week':
-        return aggregateWeeklyData(dailyData);
+        return aggregateWeeklyData(dailyData).slice(-104); // 周K显示最近2年(104周)
       case 'month':
-        return aggregateMonthlyData(dailyData);
+        return aggregateMonthlyData(dailyData).slice(-60); // 月K显示最近5年(60月)
       case 'year':
-        return aggregateYearlyData(dailyData);
+        return aggregateYearlyData(dailyData).slice(-10); // 年K显示最近10年
       default:
-        return dailyData.slice(-120); // 日K显示最近120天
+        return dailyData.slice(-180); // 日K显示最近180天(约半年)
     }
   }, [dailyData, klinePeriod]);
 
