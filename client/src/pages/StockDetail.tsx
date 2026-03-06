@@ -703,6 +703,8 @@ export default function StockDetail() {
   const [stock, setStock] = useState<StockMeta | null>(null);
   const [klineData, setKlineData] = useState<StockDaily[]>([]);
   const [klinePeriod, setKlinePeriod] = useState<'day' | 'week' | 'month'>('day');
+  const [intradayFreq, setIntradayFreq] = useState<'1min' | '5min' | '15min' | '30min' | '60min'>('5min');
+  const [activeChartTab, setActiveChartTab] = useState<'kline' | 'intraday'>('kline');
   const [loading, setLoading] = useState(true);
 
   // 获取股票基本信息和K线数据
@@ -729,7 +731,7 @@ export default function StockDetail() {
   // 根据周期获取K线数据
   useEffect(() => {
     async function fetchKlineData() {
-      if (!tsCode) return;
+      if (!tsCode || activeChartTab !== 'kline') return;
       
       let tableName = 'stock_daily';
       let limit = 120;
@@ -759,7 +761,40 @@ export default function StockDetail() {
     }
     
     fetchKlineData();
-  }, [tsCode, klinePeriod]);
+  }, [tsCode, klinePeriod, activeChartTab]);
+
+  // 获取分时数据
+  useEffect(() => {
+    async function fetchIntradayData() {
+      if (!tsCode || activeChartTab !== 'intraday') return;
+      
+      // 获取最近5个交易日的分时数据
+      const { data } = await supabase
+        .from('stock_mins')
+        .select('trade_date, trade_time, open, high, low, close, vol, amount')
+        .eq('ts_code', tsCode)
+        .eq('freq', intradayFreq)
+        .order('trade_date', { ascending: false })
+        .order('trade_time', { ascending: false })
+        .limit(240); // 约5个交易日
+      
+      // 转换为与K线数据兼容的格式
+      const formattedData = (data || []).map(d => ({
+        trade_date: `${d.trade_date} ${d.trade_time}`,
+        open: d.open,
+        high: d.high,
+        low: d.low,
+        close: d.close,
+        vol: d.vol,
+        amount: d.amount,
+        pct_chg: 0 // 分时数据没有涨跌幅
+      })).reverse();
+      
+      setKlineData(formattedData);
+    }
+    
+    fetchIntradayData();
+  }, [tsCode, intradayFreq, activeChartTab]);
 
   // 返回路径
   const backPath = from === 'topdown' ? '/topdown' : '/dashboard';
@@ -826,13 +861,33 @@ export default function StockDetail() {
                     <BarChart3 size={18} />
                     行情走势
                   </CardTitle>
-                  <Tabs value={klinePeriod} onValueChange={(v) => setKlinePeriod(v as any)}>
-                    <TabsList className="h-8">
-                      <TabsTrigger value="day" className="text-xs px-3">日K</TabsTrigger>
-                      <TabsTrigger value="week" className="text-xs px-3">周K</TabsTrigger>
-                      <TabsTrigger value="month" className="text-xs px-3">月K</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
+                  <div className="flex items-center gap-2">
+                    <Tabs value={activeChartTab} onValueChange={(v) => setActiveChartTab(v as any)}>
+                      <TabsList className="h-8">
+                        <TabsTrigger value="intraday" className="text-xs px-3">分时</TabsTrigger>
+                        <TabsTrigger value="kline" className="text-xs px-3">K线</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                    {activeChartTab === 'kline' ? (
+                      <Tabs value={klinePeriod} onValueChange={(v) => setKlinePeriod(v as any)}>
+                        <TabsList className="h-8">
+                          <TabsTrigger value="day" className="text-xs px-2">日K</TabsTrigger>
+                          <TabsTrigger value="week" className="text-xs px-2">周K</TabsTrigger>
+                          <TabsTrigger value="month" className="text-xs px-2">月K</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    ) : (
+                      <Tabs value={intradayFreq} onValueChange={(v) => setIntradayFreq(v as any)}>
+                        <TabsList className="h-8">
+                          <TabsTrigger value="1min" className="text-xs px-2">1分</TabsTrigger>
+                          <TabsTrigger value="5min" className="text-xs px-2">5分</TabsTrigger>
+                          <TabsTrigger value="15min" className="text-xs px-2">15分</TabsTrigger>
+                          <TabsTrigger value="30min" className="text-xs px-2">30分</TabsTrigger>
+                          <TabsTrigger value="60min" className="text-xs px-2">60分</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
