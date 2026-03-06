@@ -539,12 +539,22 @@ export default function StockDetailPanel({ stock, from, onClose }: StockDetailPa
   useEffect(() => {
     async function fetchStockData() {
       setLoading(true);
+      console.log('[StockDetailPanel] Fetching data for:', stock.ts_code);
 
-      const [{ data: dailyData }, { data: basicData }, { data: moneyflowData }] = await Promise.all([
-        supabase.from('stock_daily').select('trade_date, close, pct_chg, high, low').eq('ts_code', stock.ts_code).order('trade_date', { ascending: false }).limit(1).single(),
-        supabase.from('stock_daily_basic').select('trade_date, pe_ttm, pb, ps_ttm, dv_ratio, turnover_rate, volume_ratio, total_mv, circ_mv').eq('ts_code', stock.ts_code).order('trade_date', { ascending: false }).limit(1).single(),
-        supabase.from('stock_moneyflow').select('trade_date, net_amount, buy_elg_amount, buy_lg_amount, buy_md_amount, buy_sm_amount, sell_elg_amount, sell_lg_amount, sell_md_amount, sell_sm_amount').eq('ts_code', stock.ts_code).order('trade_date', { ascending: false }).limit(1).single(),
-      ]);
+      try {
+        const [{ data: dailyData, error: dailyError }, { data: basicData, error: basicError }, { data: moneyflowData, error: moneyflowError }] = await Promise.all([
+          supabase.from('stock_daily').select('trade_date, close, pct_chg, high, low').eq('ts_code', stock.ts_code).order('trade_date', { ascending: false }).limit(1).single(),
+          supabase.from('stock_daily_basic').select('trade_date, pe_ttm, pb, ps_ttm, dv_ratio, turnover_rate, volume_ratio, total_mv, circ_mv').eq('ts_code', stock.ts_code).order('trade_date', { ascending: false }).limit(1).single(),
+          supabase.from('stock_moneyflow').select('trade_date, net_amount, buy_elg_amount, buy_lg_amount, buy_md_amount, buy_sm_amount, sell_elg_amount, sell_lg_amount, sell_md_amount, sell_sm_amount').eq('ts_code', stock.ts_code).order('trade_date', { ascending: false }).limit(1).single(),
+        ]);
+
+        if (dailyError) console.error('[StockDetailPanel] Daily data error:', dailyError);
+        if (basicError) console.error('[StockDetailPanel] Basic data error:', basicError);
+        if (moneyflowError) console.error('[StockDetailPanel] Moneyflow error:', moneyflowError);
+
+        console.log('[StockDetailPanel] Daily data:', dailyData);
+        console.log('[StockDetailPanel] Basic data:', basicData);
+        console.log('[StockDetailPanel] Moneyflow data:', moneyflowData);
 
       // 获取52周高低点
       const oneYearAgo = new Date();
@@ -592,6 +602,10 @@ export default function StockDetailPanel({ stock, from, onClose }: StockDetailPa
       }
 
       setLoading(false);
+      } catch (err) {
+        console.error('[StockDetailPanel] Fetch error:', err);
+        setLoading(false);
+      }
     }
 
     fetchStockData();
