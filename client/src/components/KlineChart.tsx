@@ -153,12 +153,11 @@ export function KlineChart({
         },
       });
 
-      // 创建 MA 线系列
+      // 创建 MA 线系列（不显示内置标题）
       maPeriods.forEach((period, index) => {
         const maSeries = chart.addLineSeries({
           color: MA_COLORS[index % MA_COLORS.length],
           lineWidth: 1,
-          title: `MA${period}`,
           lastValueVisible: false,  // 不显示最后一个值标签
           lineStyle: 0,             // 实线
           priceLineVisible: false,  // 不显示价格线（水平虚线）
@@ -248,11 +247,49 @@ export function KlineChart({
   }, [data, maPeriods]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', height: `${height}px` }}
-      className="kline-chart-container"
-    />
+    <div style={{ position: 'relative', width: '100%', height: `${height}px` }}>
+      {/* MA 图例 - 右上角 */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '10px',
+          right: '60px',
+          display: 'flex',
+          gap: '12px',
+          zIndex: 10,
+          backgroundColor: 'rgba(15, 23, 42, 0.8)',
+          padding: '4px 8px',
+          borderRadius: '4px',
+        }}
+      >
+        {maPeriods.map((period, index) => (
+          <div
+            key={period}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '11px',
+              color: MA_COLORS[index % MA_COLORS.length],
+            }}
+          >
+            <span
+              style={{
+                width: '12px',
+                height: '2px',
+                backgroundColor: MA_COLORS[index % MA_COLORS.length],
+              }}
+            />
+            MA{period}
+          </div>
+        ))}
+      </div>
+      <div
+        ref={containerRef}
+        style={{ width: '100%', height: '100%' }}
+        className="kline-chart-container"
+      />
+    </div>
   );
 }
 
