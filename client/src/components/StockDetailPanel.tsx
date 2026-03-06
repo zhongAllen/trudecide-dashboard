@@ -298,7 +298,7 @@ function aggregateYearlyData(dailyData: StockDaily[]): StockDaily[] {
 
 // ─── K线图面板组件 ─────────────────────────────────────────────────────────────
 function KlineChartPanel({ tsCode }: { tsCode: string }) {
-  const [dailyData, setDailyData] = useState<StockDaily[]>([]);
+  const [klineData, setKlineData] = useState<StockDaily[]>([]);
   const [klinePeriod, setKlinePeriod] = useState<'day' | 'week' | 'month' | 'year'>('day');
   const [loading, setLoading] = useState(true);
   const [realtimeData, setRealtimeData] = useState<{
@@ -308,73 +308,68 @@ function KlineChartPanel({ tsCode }: { tsCode: string }) {
     amount: number;
   } | null>(null);
 
-  // 获取日K数据（作为基础数据）
+  // 根据周期获取对应的数据
   useEffect(() => {
-    async function fetchDailyData() {
+    async function fetchKlineData() {
       setLoading(true);
-      // 先获取最新日期
-      const { data: latestData } = await supabase
-        .from('stock_daily')
-        .select('trade_date')
+      
+      let tableName = 'stock_daily';
+      let limit = 180;
+      
+      switch (klinePeriod) {
+        case 'week':
+          tableName = 'stock_weekly';
+          limit = 104; // 最近2年
+          break;
+        case 'month':
+          tableName = 'stock_monthly';
+          limit = 60; // 最近5年
+          break;
+        case 'year':
+          // 年K从日K聚合，但只取最近10年的数据
+          tableName = 'stock_daily';
+          limit = 3650; // 约10年
+          break;
+        default:
+          tableName = 'stock_daily';
+          limit = 180; // 最近半年
+      }
+      
+      // 获取数据
+      const { data } = await supabase
+        .from(tableName)
+        .select('trade_date, open, high, low, close, vol, amount, pct_chg')
         .eq('ts_code', tsCode)
         .order('trade_date', { ascending: false })
-        .limit(1);
+        .limit(limit);
       
-      const latestDate = latestData?.[0]?.trade_date;
+      let result = data || [];
       
-      if (latestDate) {
-        // 获取最近5年的数据
-        const fiveYearsAgo = new Date(latestDate);
-        fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
-        
-        const { data } = await supabase
-          .from('stock_daily')
-          .select('trade_date, open, high, low, close, vol, amount, pct_chg')
-          .eq('ts_code', tsCode)
-          .gte('trade_date', fiveYearsAgo.toISOString().split('T')[0])
-          .order('trade_date', { ascending: true });
-
-        setDailyData(data || []);
-      } else {
-        setDailyData([]);
+      // 年K需要聚合
+      if (klinePeriod === 'year' && result.length > 0) {
+        result = aggregateYearlyData(result.reverse());
       }
+      
+      setKlineData(result.reverse());
+      
+      // 设置实时数据（最新一条）
+      if (result.length > 0) {
+        const latest = result[result.length - 1];
+        setRealtimeData({
+          current: latest.close,
+          pctChg: latest.pct_chg,
+          volume: latest.vol,
+          amount: latest.amount,
+        });
+      }
+      
       setLoading(false);
     }
 
-    fetchDailyData();
-  }, [tsCode]);
-
-  // 根据周期计算K线数据
-  const klineData = useMemo(() => {
-    if (dailyData.length === 0) return [];
-
-    switch (klinePeriod) {
-      case 'week':
-        return aggregateWeeklyData(dailyData).slice(-104); // 周K显示最近2年(104周)
-      case 'month':
-        return aggregateMonthlyData(dailyData).slice(-60); // 月K显示最近5年(60月)
-      case 'year':
-        return aggregateYearlyData(dailyData).slice(-10); // 年K显示最近10年
-      default:
-        return dailyData.slice(-180); // 日K显示最近180天(约半年)
-    }
-  }, [dailyData, klinePeriod]);
+    fetchKlineData();
+  }, [tsCode, klinePeriod]);
 
   const chartData = useMemo(() => convertToKlineData(klineData), [klineData]);
-
-  // 获取实时行情（轮询）
-  useEffect(() => {
-    // 先获取最新一条数据作为实时数据
-    if (dailyData.length > 0) {
-      const latest = dailyData[dailyData.length - 1];
-      setRealtimeData({
-        current: latest.close,
-        pctChg: latest.pct_chg,
-        volume: latest.vol,
-        amount: latest.amount,
-      });
-    }
-  }, [dailyData]);
 
   return (
     <div className="space-y-4">
