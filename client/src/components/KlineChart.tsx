@@ -159,6 +159,9 @@ export function KlineChart({
           color: MA_COLORS[index % MA_COLORS.length],
           lineWidth: 1,
           title: `MA${period}`,
+          lastValueVisible: false,  // 不显示最后一个值标签
+          lineStyle: 0,             // 实线
+          priceLineVisible: false,  // 不显示价格线（水平虚线）
         });
         maSeriesRefs.current.push(maSeries);
       });
