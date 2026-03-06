@@ -302,7 +302,7 @@ function FinancialPanel({ tsCode }: { tsCode: string }) {
         .eq('ts_code', tsCode)
         .order('end_date', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       setFinaData(data);
       setLoading(false);
@@ -447,9 +447,9 @@ function CompanyCanvasPanel({ stock }: { stock: StockMeta }) {
       setLoading(true);
 
       const [{ data: info }, { data: holderData }, { data: ai }] = await Promise.all([
-        supabase.from('stock_company_info').select('*').eq('ts_code', stock.ts_code).single(),
+        supabase.from('stock_company_info').select('*').eq('ts_code', stock.ts_code).maybeSingle(),
         supabase.from('stock_holders').select('holder_name, hold_ratio, hold_amount').eq('ts_code', stock.ts_code).order('hold_ratio', { ascending: false }).limit(10),
-        supabase.from('company_ai_analysis').select('*').eq('ts_code', stock.ts_code).single(),
+        supabase.from('company_ai_analysis').select('*').eq('ts_code', stock.ts_code).maybeSingle(),
       ]);
 
       setCompanyInfo(info);
