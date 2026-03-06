@@ -2710,15 +2710,37 @@ export default function TopDown() {
     const stockCode = params.get('stock');
 
     if (stockCode) {
-      // 从 stock_meta 查询股票信息
+      // 从 stock_meta 查询股票信息，同时获取所属板块
       supabase
         .from('stock_meta')
         .select('*')
         .eq('ts_code', stockCode)
         .single()
-        .then(({ data }) => {
-          if (data) {
-            setSelectedStock(data as StockMeta);
+        .then(async ({ data: stockData }) => {
+          if (stockData) {
+            setSelectedStock(stockData as StockMeta);
+            
+            // 查询该股票所属的第一个板块作为选中板块
+            const { data: sectorData } = await supabase
+              .from('sector_stock_map')
+              .select('sector_id')
+              .eq('ts_code', stockCode)
+              .eq('is_current', true)
+              .limit(1)
+              .single();
+            
+            if (sectorData) {
+              const { data: sectorMeta } = await supabase
+                .from('sector_meta')
+                .select('*')
+                .eq('id', sectorData.sector_id)
+                .single();
+              
+              if (sectorMeta) {
+                setSelectedSector(sectorMeta as RealSectorMeta);
+              }
+            }
+            
             setActiveLayer(3);
           }
           setInitialLoadDone(true);
