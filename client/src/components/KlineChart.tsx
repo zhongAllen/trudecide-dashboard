@@ -254,63 +254,92 @@ export function KlineChart({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // 初始化图表实例
-    const chart = init(containerRef.current, CHART_OPTIONS);
-    chartRef.current = chart;
-
-    // 设置时区为东八区
-    chart.setTimezone('+08:00');
-
-    // 添加蜡烛图主图
-    chart.createIndicator('Candle', false, { id: 'candle' });
-
-    // 添加 MA 均线
-    maPeriods.forEach((period, index) => {
-      chart.createIndicator('MA', false, {
-        id: `ma${period}`,
-        params: [period],
-        styles: {
-          line: {
-            color: getMaColor(index),
-            size: 1,
-          },
-        },
-      });
-    });
-
-    // 监听十字光标移动
-    const handleCrosshairMove = (e: any) => {
-      if (onDataHover) {
-        if (e?.kLineData) {
-          onDataHover({
-            timestamp: e.kLineData.timestamp,
-            open: e.kLineData.open,
-            high: e.kLineData.high,
-            low: e.kLineData.low,
-            close: e.kLineData.close,
-            volume: e.kLineData.volume,
-          });
-        } else {
-          onDataHover(null);
-        }
+    try {
+      // 初始化图表实例
+      const chart = init(containerRef.current, CHART_OPTIONS);
+      if (!chart) {
+        console.error('KlineChart init failed');
+        return;
       }
-    };
+      chartRef.current = chart;
 
-    chart.subscribeAction('crosshairMove', handleCrosshairMove);
+      // 设置时区为东八区
+      if (typeof chart.setTimezone === 'function') {
+        chart.setTimezone('+08:00');
+      }
 
-    // 清理函数
-    return () => {
-      chart.unsubscribeAction('crosshairMove', handleCrosshairMove);
-      dispose(chart);
-      chartRef.current = null;
-    };
+      // 添加蜡烛图主图
+      if (typeof chart.createIndicator === 'function') {
+        chart.createIndicator('Candle', false, { id: 'candle' });
+
+        // 添加 MA 均线
+        maPeriods.forEach((period, index) => {
+          chart.createIndicator('MA', false, {
+            id: `ma${period}`,
+            params: [period],
+            styles: {
+              line: {
+                color: getMaColor(index),
+                size: 1,
+              },
+            },
+          });
+        });
+      }
+
+      // 监听十字光标移动
+      const handleCrosshairMove = (e: any) => {
+        if (onDataHover) {
+          if (e?.kLineData) {
+            onDataHover({
+              timestamp: e.kLineData.timestamp,
+              open: e.kLineData.open,
+              high: e.kLineData.high,
+              low: e.kLineData.low,
+              close: e.kLineData.close,
+              volume: e.kLineData.volume,
+            });
+          } else {
+            onDataHover(null);
+          }
+        }
+      };
+
+      if (typeof chart.subscribeAction === 'function') {
+        chart.subscribeAction('crosshairMove', handleCrosshairMove);
+      }
+
+      // 清理函数
+      return () => {
+        try {
+          if (typeof chart.unsubscribeAction === 'function') {
+            chart.unsubscribeAction('crosshairMove', handleCrosshairMove);
+          }
+          dispose(chart);
+        } catch (e) {
+          console.error('KlineChart cleanup error:', e);
+        }
+        chartRef.current = null;
+      };
+    } catch (e) {
+      console.error('KlineChart init error:', e);
+    }
   }, [maPeriods, onDataHover]);
 
   // 更新数据
   useEffect(() => {
     if (!chartRef.current || data.length === 0) return;
 
-    chartRef.current.applyNewData(data);
+    try {
+      // klinecharts v10 API
+      if (typeof chartRef.current.applyNewData === 'function') {
+        chartRef.current.applyNewData(data);
+      } else if (typeof chartRef.current.setData === 'function') {
+        chartRef.current.setData(data);
+      }
+    } catch (e) {
+      console.error('KlineChart update data error:', e);
+    }
   }, [data]);
 
   // 响应式调整
