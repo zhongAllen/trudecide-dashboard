@@ -41,6 +41,7 @@ import {
   type MacroIndicatorValue, type IndexDailyBar,
   type RealMacroMatrix, type RealMatrixCell,
 } from '@/lib/topdown-api';
+import { supabase } from '@/lib/supabase';
 
 // ─── 颜色常量 ──────────────────────────────────────────────────────────────────
 const UP_COLOR   = '#ef4444';
@@ -81,9 +82,12 @@ function fmtNum(v: number, digits = 2) {
   return v.toLocaleString('zh-CN', { maximumFractionDigits: digits });
 }
 function fmtMv(v: number) {
-  if (v >= 10000) return `${(v / 10000).toFixed(1)}万亿`;
-  if (v >= 1000) return `${(v / 1000).toFixed(1)}千亿`;
-  return `${v.toFixed(0)}亿`;
+  // v 单位：万元（Tushare stock_daily_basic.total_mv/circ_mv 原始单位）
+  // 转换为亿：1亿 = 10000万元
+  const yi = v / 10000;
+  if (yi >= 10000) return `${(yi / 10000).toFixed(1)}万亿`;
+  if (yi >= 1000) return `${(yi / 1000).toFixed(1)}千亿`;
+  return `${yi.toFixed(1)}亿`;
 }
 function fmtAmount(v: number) {
   // v 单位：万元
@@ -1389,22 +1393,51 @@ function IntradayTooltip({ active, payload }: { active?: boolean; payload?: Arra
   );
 }
 
-function KlineChart({ tsCode, basePrice }: { tsCode: string; basePrice: number }) {
+function KlineChart({ tsCode }: { tsCode: string }) {
   const [klinePeriod, setKlinePeriod] = useState<KlinePeriod>('daily');
   const [intradayPeriod, setIntradayPeriod] = useState<IntradayPeriod>('5min');
   const [isIntraday, setIsIntraday] = useState(false);
   const [klineData, setKlineData] = useState<StockDaily[]>([]);
   const [intradayData, setIntradayData] = useState<SinaMinuteBar[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setKlineData(genStockKline(tsCode, basePrice, klinePeriod, klinePeriod === 'daily' ? 120 : klinePeriod === 'weekly' ? 80 : 60));
-  }, [tsCode, basePrice, klinePeriod]);
-
-  useEffect(() => {
-    if (isIntraday) {
-      setIntradayData(genIntradayData(basePrice, intradayPeriod));
+    async function fetchKlineData() {
+      setLoading(true);
+      
+      if (isIntraday) {
+        // 分时数据使用MOCK（需要接入实时数据源）
+        setIntradayData(genIntradayData(100, intradayPeriod));
+      } else {
+        // 从Supabase获取K线数据
+        const limit = klinePeriod === 'daily' ? 120 : klinePeriod === 'weekly' ? 80 : 60;
+        const { data } = await supabase
+          .from('stock_daily')
+          .select('trade_date, open, high, low, close, vol, amount')
+          .eq('ts_code', tsCode)
+          .order('trade_date', { ascending: false })
+          .limit(limit);
+        
+        if (data) {
+          // 转换为StockDaily格式
+          const formatted = data.reverse().map(d => ({
+            ts_code: tsCode,
+            trade_date: d.trade_date,
+            open: d.open ?? 0,
+            high: d.high ?? 0,
+            low: d.low ?? 0,
+            close: d.close ?? 0,
+            vol: d.vol ?? 0,
+            amount: d.amount ?? 0,
+          }));
+          setKlineData(formatted);
+        }
+      }
+      
+      setLoading(false);
     }
-  }, [isIntraday, basePrice, intradayPeriod]);
+    fetchKlineData();
+  }, [tsCode, klinePeriod, isIntraday, intradayPeriod]);
 
   const chartData = klineData.map(d => ({
     ...d,
@@ -1416,9 +1449,9 @@ function KlineChart({ tsCode, basePrice }: { tsCode: string; basePrice: number }
     wickHigh: d.high,
   }));
 
-  const latestClose = klineData[klineData.length - 1]?.close ?? basePrice;
-  const firstClose = klineData[0]?.close ?? basePrice;
-  const totalPct = ((latestClose - firstClose) / firstClose) * 100;
+  const latestClose = klineData[klineData.length - 1]?.close ?? 0;
+  const firstClose = klineData[0]?.close ?? 0;
+  const totalPct = firstClose > 0 ? ((latestClose - firstClose) / firstClose) * 100 : 0;
 
   return (
     <div className="space-y-3">
@@ -1480,7 +1513,7 @@ function KlineChart({ tsCode, basePrice }: { tsCode: string; basePrice: number }
               <YAxis yAxisId="price" domain={['auto', 'auto']} tick={{ fill: '#94a3b8', fontSize: 10 }} tickLine={false} width={50} />
               <YAxis yAxisId="vol" orientation="right" tick={{ fill: '#94a3b8', fontSize: 10 }} tickLine={false} width={40} />
               <ReTooltip content={<IntradayTooltip />} />
-              <ReferenceLine yAxisId="price" y={basePrice} stroke="rgba(255,255,255,0.2)" strokeDasharray="4 4" />
+              <ReferenceLine yAxisId="price" y={firstClose} stroke="rgba(255,255,255,0.2)" strokeDasharray="4 4" />
               <Bar yAxisId="vol" dataKey="volume" fill="rgba(148,163,184,0.3)" radius={[1, 1, 0, 0]} />
               <Line yAxisId="price" type="monotone" dataKey="price" stroke="#f59e0b" strokeWidth={1.5} dot={false} />
             </ComposedChart>
@@ -1521,7 +1554,7 @@ function KlineChart({ tsCode, basePrice }: { tsCode: string; basePrice: number }
 
 // ─── 资金流向面板 ─────────────────────────────────────────────────────────────
 // 字段对应 stock_moneyflow 表：net_amount, buy_elg_amount, buy_lg_amount, buy_md_amount, buy_sm_amount
-function MoneyFlowPanel({ profile }: { profile: ReturnType<typeof genStockProfile> }) {
+function MoneyFlowPanel({ profile }: { profile: StockProfile }) {
   const netFlow = profile.net_amount;   // stock_moneyflow.net_amount（万元）
   const isNetIn = netFlow > 0;
 
@@ -1537,7 +1570,7 @@ function MoneyFlowPanel({ profile }: { profile: ReturnType<typeof genStockProfil
       <div className="flex items-center gap-2">
         <DollarSign className="w-4 h-4 text-gray-400" />
         <span className="text-sm font-semibold text-gray-700">资金流向</span>
-        <span className="text-xs text-gray-400">（Mock · 接库后接 stock_moneyflow 表）</span>
+        <span className="text-xs text-gray-400">（Tushare Pro · stock_moneyflow 表）</span>
       </div>
       {/* 净流入汇总 */}
       <div className={`rounded-lg p-3 flex items-center justify-between ${isNetIn ? 'bg-red-50 border border-red-100' : 'bg-green-50 border border-green-100'}`}>
@@ -1586,7 +1619,7 @@ function MoneyFlowPanel({ profile }: { profile: ReturnType<typeof genStockProfil
 }
 
 // ─── 基本面面板（stock_daily_basic 格式）───────────────────────────────────────────
-function FundamentalsPanel({ profile }: { profile: ReturnType<typeof genStockProfile> }) {
+function FundamentalsPanel({ profile }: { profile: StockProfile }) {
   const items = [
     { label: 'PE(TTM)', value: profile.pe_ttm.toFixed(1), unit: '倍', field: 'pe_ttm' },
     { label: 'PB', value: profile.pb.toFixed(2), unit: '倍', field: 'pb' },
@@ -1602,8 +1635,8 @@ function FundamentalsPanel({ profile }: { profile: ReturnType<typeof genStockPro
   return (
     <div className="space-y-3">
       <div className="text-xs text-gray-400 flex items-center gap-1">
-        <span className="bg-amber-50 border border-amber-200 text-amber-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
-        stock_daily_basic 表（Mock，接库后实时更新）
+        <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+        stock_daily_basic 表（Tushare Pro，每日更新）
       </div>
       <div className="grid grid-cols-5 gap-2">
         {items.map(item => (
@@ -1619,8 +1652,83 @@ function FundamentalsPanel({ profile }: { profile: ReturnType<typeof genStockPro
 }
 
 // ─── 财务面板（stock_fina_indicator + stock_income + stock_balance 格式）───────────────────
+interface StockFina {
+  end_date: string;
+  roe: number | null;
+  roa: number | null;
+  grossprofit_margin: number | null;
+  netprofit_margin: number | null;
+  debt_to_assets: number | null;
+  current_ratio: number | null;
+  netprofit_yoy: number | null;
+  or_yoy: number | null;
+}
+
+interface StockIncome {
+  total_revenue: number | null;
+  operate_profit: number | null;
+  n_income_attr_p: number | null;
+  rd_exp: number | null;
+  ebit: number | null;
+  ebitda: number | null;
+  basic_eps: number | null;
+  n_income: number | null;
+}
+
+interface StockBalance {
+  total_assets: number | null;
+  total_liab: number | null;
+  total_hldr_eqy_exc_min_int: number | null;
+  money_cap: number | null;
+  accounts_receiv: number | null;
+  inventories: number | null;
+  lt_borr: number | null;
+  st_borr: number | null;
+}
+
 function FinancialPanel({ tsCode }: { tsCode: string }) {
-  const { fina, income, balance } = genStockFina(tsCode);
+  const [fina, setFina] = useState<StockFina | null>(null);
+  const [income, setIncome] = useState<StockIncome | null>(null);
+  const [balance, setBalance] = useState<StockBalance | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchFinancialData() {
+      setLoading(true);
+      // 获取最新报告期的财务指标
+      const { data: finaData } = await supabase
+        .from('stock_fina_indicator')
+        .select('end_date, roe, roa, grossprofit_margin, netprofit_margin, debt_to_assets, current_ratio, netprofit_yoy, or_yoy')
+        .eq('ts_code', tsCode)
+        .order('end_date', { ascending: false })
+        .limit(1)
+        .single();
+      
+      // 获取最新报告期的利润表
+      const { data: incomeData } = await supabase
+        .from('stock_income')
+        .select('total_revenue, operate_profit, n_income_attr_p, rd_exp, ebit, ebitda, basic_eps, n_income')
+        .eq('ts_code', tsCode)
+        .order('end_date', { ascending: false })
+        .limit(1)
+        .single();
+      
+      // 获取最新报告期的资产负债表
+      const { data: balanceData } = await supabase
+        .from('stock_balance')
+        .select('total_assets, total_liab, total_hldr_eqy_exc_min_int, money_cap, accounts_receiv, inventories, lt_borr, st_borr')
+        .eq('ts_code', tsCode)
+        .order('end_date', { ascending: false })
+        .limit(1)
+        .single();
+      
+      setFina(finaData);
+      setIncome(incomeData);
+      setBalance(balanceData);
+      setLoading(false);
+    }
+    fetchFinancialData();
+  }, [tsCode]);
 
   function fmtFinaNum(v: number | null, unit = '亿'): string {
     if (v === null) return '—';
@@ -1629,102 +1737,182 @@ function FinancialPanel({ tsCode }: { tsCode: string }) {
     return v.toFixed(4);
   }
 
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="text-xs text-gray-400 flex items-center gap-1">
+          <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+          stock_fina_indicator / stock_income / stock_balance（Tushare Pro，报告期更新）
+        </div>
+        <div className="text-sm text-gray-400 py-4 text-center">加载中...</div>
+      </div>
+    );
+  }
+
+  if (!fina && !income && !balance) {
+    return (
+      <div className="space-y-4">
+        <div className="text-xs text-gray-400 flex items-center gap-1">
+          <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+          stock_fina_indicator / stock_income / stock_balance（Tushare Pro，报告期更新）
+        </div>
+        <div className="text-sm text-gray-400 py-4 text-center">暂无财务数据</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="text-xs text-gray-400 flex items-center gap-1">
-        <span className="bg-amber-50 border border-amber-200 text-amber-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
-        stock_fina_indicator / stock_income / stock_balance（Mock，报告期更新）
-        <span className="ml-auto text-gray-400">2025年年报 {fina.end_date}</span>
+        <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+        stock_fina_indicator / stock_income / stock_balance（Tushare Pro，报告期更新）
+        <span className="ml-auto text-gray-400">最新报告期 {fina?.end_date || '—'}</span>
       </div>
 
       {/* 核心财务指标 */}
-      <div>
-        <div className="text-xs font-semibold text-gray-600 mb-2">盈利能力（stock_fina_indicator）</div>
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: 'ROE', value: fmtFinaNum(fina.roe, '%'), field: 'roe', highlight: (fina.roe ?? 0) > 15 },
-            { label: 'ROA', value: fmtFinaNum(fina.roa, '%'), field: 'roa', highlight: false },
-            { label: '毛利率', value: fmtFinaNum(fina.grossprofit_margin, '%'), field: 'grossprofit_margin', highlight: false },
-            { label: '净利率', value: fmtFinaNum(fina.netprofit_margin, '%'), field: 'netprofit_margin', highlight: false },
-            { label: '资负率', value: fmtFinaNum(fina.debt_to_assets, '%'), field: 'debt_to_assets', highlight: (fina.debt_to_assets ?? 0) > 70 },
-            { label: '流动比率', value: fina.current_ratio?.toFixed(2) ?? '—', field: 'current_ratio', highlight: false },
-            { label: '归母净利同比', value: fmtFinaNum(fina.netprofit_yoy, '%'), field: 'netprofit_yoy', highlight: (fina.netprofit_yoy ?? 0) > 20 },
-            { label: '营收同比', value: fmtFinaNum(fina.or_yoy, '%'), field: 'or_yoy', highlight: (fina.or_yoy ?? 0) > 15 },
-          ].map(item => (
-            <div key={item.label} className={`rounded-lg p-2.5 text-center border ${
-              item.highlight ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'
-            }`}>
-              <div className="text-[10px] text-gray-400 font-mono">{item.field}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{item.label}</div>
-              <div className={`text-sm font-bold mt-1 ${item.highlight ? 'text-red-600' : 'text-gray-800'}`}>{item.value}</div>
-            </div>
-          ))}
+      {fina && (
+        <div>
+          <div className="text-xs font-semibold text-gray-600 mb-2">盈利能力（stock_fina_indicator）</div>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: 'ROE', value: fmtFinaNum(fina.roe, '%'), field: 'roe', highlight: (fina.roe ?? 0) > 15 },
+              { label: 'ROA', value: fmtFinaNum(fina.roa, '%'), field: 'roa', highlight: false },
+              { label: '毛利率', value: fmtFinaNum(fina.grossprofit_margin, '%'), field: 'grossprofit_margin', highlight: false },
+              { label: '净利率', value: fmtFinaNum(fina.netprofit_margin, '%'), field: 'netprofit_margin', highlight: false },
+              { label: '资负率', value: fmtFinaNum(fina.debt_to_assets, '%'), field: 'debt_to_assets', highlight: (fina.debt_to_assets ?? 0) > 70 },
+              { label: '流动比率', value: fina.current_ratio?.toFixed(2) ?? '—', field: 'current_ratio', highlight: false },
+              { label: '归母净利同比', value: fmtFinaNum(fina.netprofit_yoy, '%'), field: 'netprofit_yoy', highlight: (fina.netprofit_yoy ?? 0) > 20 },
+              { label: '营收同比', value: fmtFinaNum(fina.or_yoy, '%'), field: 'or_yoy', highlight: (fina.or_yoy ?? 0) > 15 },
+            ].map(item => (
+              <div key={item.label} className={`rounded-lg p-2.5 text-center border ${
+                item.highlight ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'
+              }`}>
+                <div className="text-[10px] text-gray-400 font-mono">{item.field}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{item.label}</div>
+                <div className={`text-sm font-bold mt-1 ${item.highlight ? 'text-red-600' : 'text-gray-800'}`}>{item.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 利润表摘要 */}
-      <div>
-        <div className="text-xs font-semibold text-gray-600 mb-2">利润表摘要（stock_income）</div>
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: '营业总收入', value: fmtFinaNum(income.total_revenue), field: 'total_revenue' },
-            { label: '营业利润', value: fmtFinaNum(income.operate_profit), field: 'operate_profit' },
-            { label: '归母净利润', value: fmtFinaNum(income.n_income_attr_p), field: 'n_income_attr_p' },
-            { label: '研发费用', value: fmtFinaNum(income.rd_exp), field: 'rd_exp' },
-            { label: 'EBIT', value: fmtFinaNum(income.ebit), field: 'ebit' },
-            { label: 'EBITDA', value: fmtFinaNum(income.ebitda), field: 'ebitda' },
-            { label: '基本每股收益', value: income.basic_eps?.toFixed(4) ?? '—', field: 'basic_eps' },
-            { label: '净利润', value: fmtFinaNum(income.n_income), field: 'n_income' },
-          ].map(item => (
-            <div key={item.label} className="bg-gray-50 border border-gray-100 rounded-lg p-2.5 text-center">
-              <div className="text-[10px] text-gray-400 font-mono">{item.field}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{item.label}</div>
-              <div className="text-sm font-bold text-gray-800 mt-1">{item.value}</div>
-            </div>
-          ))}
+      {income && (
+        <div>
+          <div className="text-xs font-semibold text-gray-600 mb-2">利润表摘要（stock_income）</div>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: '营业总收入', value: fmtFinaNum(income.total_revenue), field: 'total_revenue' },
+              { label: '营业利润', value: fmtFinaNum(income.operate_profit), field: 'operate_profit' },
+              { label: '归母净利润', value: fmtFinaNum(income.n_income_attr_p), field: 'n_income_attr_p' },
+              { label: '研发费用', value: fmtFinaNum(income.rd_exp), field: 'rd_exp' },
+              { label: 'EBIT', value: fmtFinaNum(income.ebit), field: 'ebit' },
+              { label: 'EBITDA', value: fmtFinaNum(income.ebitda), field: 'ebitda' },
+              { label: '基本每股收益', value: income.basic_eps?.toFixed(4) ?? '—', field: 'basic_eps' },
+              { label: '净利润', value: fmtFinaNum(income.n_income), field: 'n_income' },
+            ].map(item => (
+              <div key={item.label} className="bg-gray-50 border border-gray-100 rounded-lg p-2.5 text-center">
+                <div className="text-[10px] text-gray-400 font-mono">{item.field}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{item.label}</div>
+                <div className="text-sm font-bold text-gray-800 mt-1">{item.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 资产负债表摘要 */}
-      <div>
-        <div className="text-xs font-semibold text-gray-600 mb-2">资产负债表摘要（stock_balance）</div>
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: '总资产', value: fmtFinaNum(balance.total_assets), field: 'total_assets' },
-            { label: '总负债', value: fmtFinaNum(balance.total_liab), field: 'total_liab' },
-            { label: '归母净资产', value: fmtFinaNum(balance.total_hldr_eqy_exc_min_int), field: 'total_hldr_eqy_exc_min_int' },
-            { label: '货币资金', value: fmtFinaNum(balance.money_cap), field: 'money_cap' },
-            { label: '应收账款', value: fmtFinaNum(balance.accounts_receiv), field: 'accounts_receiv' },
-            { label: '存货', value: fmtFinaNum(balance.inventories), field: 'inventories' },
-            { label: '长期借款', value: fmtFinaNum(balance.lt_borr), field: 'lt_borr' },
-            { label: '短期借款', value: fmtFinaNum(balance.st_borr), field: 'st_borr' },
-          ].map(item => (
-            <div key={item.label} className="bg-gray-50 border border-gray-100 rounded-lg p-2.5 text-center">
-              <div className="text-[10px] text-gray-400 font-mono">{item.field}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{item.label}</div>
-              <div className="text-sm font-bold text-gray-800 mt-1">{item.value}</div>
-            </div>
-          ))}
+      {balance && (
+        <div>
+          <div className="text-xs font-semibold text-gray-600 mb-2">资产负债表摘要（stock_balance）</div>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: '总资产', value: fmtFinaNum(balance.total_assets), field: 'total_assets' },
+              { label: '总负债', value: fmtFinaNum(balance.total_liab), field: 'total_liab' },
+              { label: '归母净资产', value: fmtFinaNum(balance.total_hldr_eqy_exc_min_int), field: 'total_hldr_eqy_exc_min_int' },
+              { label: '货币资金', value: fmtFinaNum(balance.money_cap), field: 'money_cap' },
+              { label: '应收账款', value: fmtFinaNum(balance.accounts_receiv), field: 'accounts_receiv' },
+              { label: '存货', value: fmtFinaNum(balance.inventories), field: 'inventories' },
+              { label: '长期借款', value: fmtFinaNum(balance.lt_borr), field: 'lt_borr' },
+              { label: '短期借款', value: fmtFinaNum(balance.st_borr), field: 'st_borr' },
+            ].map(item => (
+              <div key={item.label} className="bg-gray-50 border border-gray-100 rounded-lg p-2.5 text-center">
+                <div className="text-[10px] text-gray-400 font-mono">{item.field}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{item.label}</div>
+                <div className="text-sm font-bold text-gray-800 mt-1">{item.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
 // ─── 公告面板（stock_announcement 格式）───────────────────────────────────────────────────
+interface StockAnnouncement {
+  ts_code: string;
+  ann_date: string;
+  ann_type: string;
+  title: string;
+  url: string | null;
+}
+
 function AnnouncementPanel({ tsCode, nameCn }: { tsCode: string; nameCn: string }) {
-  const announcements = genStockAnnouncements(tsCode, nameCn);
+  const [announcements, setAnnouncements] = useState<StockAnnouncement[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchAnnouncements() {
+      setLoading(true);
+      const { data } = await supabase
+        .from('stock_announcement')
+        .select('ts_code, ann_date, ann_type, title, url')
+        .eq('ts_code', tsCode)
+        .order('ann_date', { ascending: false })
+        .limit(10);
+      setAnnouncements(data || []);
+      setLoading(false);
+    }
+    fetchAnnouncements();
+  }, [tsCode]);
+
   const typeLabel: Record<string, { label: string; color: string }> = {
     annual:  { label: '年报', color: 'bg-red-50 text-red-700 border-red-200' },
     semi:    { label: '半年报', color: 'bg-orange-50 text-orange-700 border-orange-200' },
     quarter: { label: '季报', color: 'bg-amber-50 text-amber-700 border-amber-200' },
     other:   { label: '临时公告', color: 'bg-gray-50 text-gray-600 border-gray-200' },
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        <div className="text-xs text-gray-400 flex items-center gap-1">
+          <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+          stock_announcement 表（Tushare Pro，每日同步巨潮财经公告）
+        </div>
+        <div className="text-sm text-gray-400 py-4 text-center">加载中...</div>
+      </div>
+    );
+  }
+
+  if (announcements.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="text-xs text-gray-400 flex items-center gap-1">
+          <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+          stock_announcement 表（Tushare Pro，每日同步巨潮财经公告）
+        </div>
+        <div className="text-sm text-gray-400 py-4 text-center">暂无公告数据</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="text-xs text-gray-400 flex items-center gap-1">
-        <span className="bg-amber-50 border border-amber-200 text-amber-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
-        stock_announcement 表（Mock，接库后实时同步巨潮财经公告）
+        <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+        stock_announcement 表（Tushare Pro，每日同步巨潮财经公告）
       </div>
       <div className="space-y-2">
         {announcements.map((ann, i) => {
@@ -1755,16 +1943,88 @@ function AnnouncementPanel({ tsCode, nameCn }: { tsCode: string; nameCn: string 
           );
         })}
       </div>
-      <div className="text-xs text-gray-400 text-center py-2">展示最近 6 条公告，接库后可按时间/类型过滤</div>
+      <div className="text-xs text-gray-400 text-center py-2">展示最近 {announcements.length} 条公告</div>
     </div>
   );
 }
 
 // ─── 财务趋势面板 ────────────────────────────────────────────────────────────
+interface FinaTrendPoint {
+  period: string;
+  revenue: number;
+  net_profit: number;
+  revenue_yoy: number;
+  profit_yoy: number;
+  roe: number;
+  debt_ratio: number;
+  gross_margin: number;
+  net_margin: number;
+}
+
 function FinaTrendPanel({ tsCode }: { tsCode: string }) {
   const [mode, setMode] = useState<'quarterly' | 'annual'>('quarterly');
   const [chartType, setChartType] = useState<'growth' | 'roe' | 'margin'>('growth');
-  const data = genStockFinaTrend(tsCode, mode);
+  const [data, setData] = useState<FinaTrendPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchFinaTrend() {
+      setLoading(true);
+      
+      // 获取财务指标数据
+      let finaQuery = supabase
+        .from('stock_fina_indicator')
+        .select('end_date, roe, debt_to_assets, grossprofit_margin, netprofit_margin, netprofit_yoy, or_yoy')
+        .eq('ts_code', tsCode);
+      
+      // 年度模式：只筛选年报数据（12-31结尾）
+      if (mode === 'annual') {
+        finaQuery = finaQuery.like('end_date', '%-12-31');
+      }
+      
+      const { data: finaData } = await finaQuery
+        .order('end_date', { ascending: false })
+        .limit(mode === 'quarterly' ? 12 : 8);
+      
+      // 获取利润表数据
+      let incomeQuery = supabase
+        .from('stock_income')
+        .select('end_date, total_revenue, n_income_attr_p')
+        .eq('ts_code', tsCode);
+      
+      // 年度模式：只筛选年报数据
+      if (mode === 'annual') {
+        incomeQuery = incomeQuery.like('end_date', '%-12-31');
+      }
+      
+      const { data: incomeData } = await incomeQuery
+        .order('end_date', { ascending: false })
+        .limit(mode === 'quarterly' ? 12 : 8);
+      
+      if (finaData && incomeData) {
+        // 合并数据
+        const merged = finaData.map((f, i) => {
+          const income = incomeData.find(inc => inc.end_date === f.end_date) || {};
+          return {
+            period: f.end_date,
+            revenue: (income.total_revenue || 0) / 1e8,
+            net_profit: (income.n_income_attr_p || 0) / 1e8,
+            revenue_yoy: f.or_yoy || 0,
+            profit_yoy: f.netprofit_yoy || 0,
+            roe: f.roe || 0,
+            debt_ratio: f.debt_to_assets || 0,
+            gross_margin: f.grossprofit_margin || 0,
+            net_margin: f.netprofit_margin || 0,
+          };
+        }).reverse();
+        
+        setData(merged);
+      }
+      
+      setLoading(false);
+    }
+    fetchFinaTrend();
+  }, [tsCode, mode]);
 
   const chartConfig = {
     growth: {
@@ -1795,11 +2055,35 @@ function FinaTrendPanel({ tsCode }: { tsCode: string }) {
 
   const cfg = chartConfig[chartType];
 
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        <div className="text-xs text-gray-400 flex items-center gap-1">
+          <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+          stock_fina_indicator + stock_income（Tushare Pro，报告期更新）
+        </div>
+        <div className="text-sm text-gray-400 py-4 text-center">加载中...</div>
+      </div>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="text-xs text-gray-400 flex items-center gap-1">
+          <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+          stock_fina_indicator + stock_income（Tushare Pro，报告期更新）
+        </div>
+        <div className="text-sm text-gray-400 py-4 text-center">暂无财务趋势数据</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="text-xs text-gray-400 flex items-center gap-1">
-        <span className="bg-amber-50 border border-amber-200 text-amber-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
-        stock_fina_indicator + stock_income（Mock，报告期更新）
+        <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+        stock_fina_indicator + stock_income（Tushare Pro，报告期更新）
       </div>
 
       {/* 控制栏 */}
@@ -1916,8 +2200,99 @@ function FinaTrendPanel({ tsCode }: { tsCode: string }) {
 }
 
 // ─── 公司画布面板 ─────────────────────────────────────────────────────────────
+interface StockHolder {
+  holder_name: string;
+  hold_ratio: number;
+  holder_type: 'state' | 'institution' | 'individual' | 'hk';
+}
+
+interface CompanyInfo {
+  com_name: string;
+  chairman: string;
+  manager: string;
+  secretary: string;
+  reg_capital: number;
+  setup_date: string;
+  province: string;
+  city: string;
+  introduction: string;
+  website: string;
+  email: string;
+  office: string;
+  employees: number;
+  main_business: string;
+  business_scope: string;
+}
+
 function CompanyCanvasPanel({ stock }: { stock: StockMeta }) {
-  const holders = genStockHolders(stock.ts_code);
+  const [holders, setHolders] = useState<StockHolder[]>([]);
+  const [endDate, setEndDate] = useState<string>('');
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+
+      // 并行获取股东数据和公司信息
+      const [holdersResult, companyResult] = await Promise.all([
+        // 获取股东数据
+        (async () => {
+          const { data: latestDate } = await supabase
+            .from('stock_holders')
+            .select('end_date')
+            .eq('ts_code', stock.ts_code)
+            .order('end_date', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (latestDate) {
+            setEndDate(latestDate.end_date);
+            const { data } = await supabase
+              .from('stock_holders')
+              .select('holder_name, hold_ratio, holder_type')
+              .eq('ts_code', stock.ts_code)
+              .eq('end_date', latestDate.end_date)
+              .order('hold_ratio', { ascending: false });
+
+            if (data && data.length > 0) {
+              const holderMap = new Map<string, { holder_name: string; hold_ratio: number; holder_type: string }>();
+              data.forEach(h => {
+                const existing = holderMap.get(h.holder_name);
+                if (!existing || h.hold_ratio > existing.hold_ratio) {
+                  holderMap.set(h.holder_name, h);
+                }
+              });
+              const uniqueHolders = Array.from(holderMap.values())
+                .sort((a, b) => b.hold_ratio - a.hold_ratio)
+                .slice(0, 10);
+
+              setHolders(uniqueHolders.map(h => ({
+                holder_name: h.holder_name,
+                hold_ratio: h.hold_ratio,
+                holder_type: h.holder_type as 'state' | 'institution' | 'individual' | 'hk'
+              })));
+            }
+          }
+        })(),
+        // 获取公司基本信息
+        (async () => {
+          const { data } = await supabase
+            .from('stock_company_info')
+            .select('com_name, chairman, manager, secretary, reg_capital, setup_date, province, city, introduction, website, email, office, employees, main_business, business_scope')
+            .eq('ts_code', stock.ts_code)
+            .single();
+          if (data) {
+            setCompanyInfo(data as CompanyInfo);
+          }
+        })()
+      ]);
+
+      setLoading(false);
+    }
+    fetchData();
+  }, [stock.ts_code]);
+
   const typeColor: Record<string, string> = {
     state: 'bg-red-50 text-red-700 border-red-200',
     institution: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -1928,74 +2303,143 @@ function CompanyCanvasPanel({ stock }: { stock: StockMeta }) {
     state: '国有', institution: '机构', individual: '个人', hk: '港股通',
   };
 
-  // 占位内容块
-  const placeholderSections = [
-    { title: '公司基本介绍', field: 'company_intro', hint: '主营业务、成立时间、上市时间、注册地、员工规模等基本信息' },
-    { title: '业务模式', field: 'business_model', hint: '收入来源、客户结构、产品/服务体系、商业模式核心逻辑' },
-    { title: '竞争壁垒', field: 'competitive_moat', hint: '核心竞争优势、行业地位、技术/品牌/规模/渠道壁垒' },
-    { title: '风险因素', field: 'risk_factors', hint: '主要经营风险、行业风险、政策风险' },
-  ];
+  // 构建公司画像内容
+  const buildCompanySections = () => {
+    if (!companyInfo) {
+      return [
+        { title: '公司基本介绍', content: null, hint: '主营业务、成立时间、上市时间、注册地、员工规模等基本信息' },
+        { title: '业务模式', content: null, hint: '收入来源、客户结构、产品/服务体系、商业模式核心逻辑' },
+        { title: '竞争壁垒', content: null, hint: '核心竞争优势、行业地位、技术/品牌/规模/渠道壁垒' },
+        { title: '风险因素', content: null, hint: '主要经营风险、行业风险、政策风险' },
+      ];
+    }
+
+    // 公司基本介绍
+    const introParts = [
+      companyInfo.introduction,
+      `\n\n【注册信息】`,
+      `公司全称：${companyInfo.com_name || '—'}`,
+      `注册地址：${companyInfo.province || ''}${companyInfo.city || ''}`,
+      `办公地址：${companyInfo.office || '—'}`,
+      `成立日期：${companyInfo.setup_date || '—'}`,
+      `注册资本：${companyInfo.reg_capital ? (companyInfo.reg_capital / 10000).toFixed(2) + '亿元' : '—'}`,
+      `员工人数：${companyInfo.employees ? companyInfo.employees + '人' : '—'}`,
+      `\n【联系方式】`,
+      `官方网站：${companyInfo.website || '—'}`,
+      `电子邮箱：${companyInfo.email || '—'}`,
+      `\n【管理层】`,
+      `董事长：${companyInfo.chairman || '—'}`,
+      `总经理：${companyInfo.manager || '—'}`,
+      `董秘：${companyInfo.secretary || '—'}`,
+    ].filter(Boolean);
+
+    // 业务模式
+    const businessParts = [
+      companyInfo.main_business,
+      companyInfo.business_scope ? `\n\n【经营范围】\n${companyInfo.business_scope}` : '',
+    ].filter(Boolean);
+
+    return [
+      { title: '公司基本介绍', content: introParts.join('\n'), source: 'stock_company_info' },
+      { title: '业务模式', content: businessParts.join('\n') || null, source: 'stock_company_info' },
+      { title: '竞争壁垒', content: null, hint: '核心竞争优势、行业地位、技术/品牌/规模/渠道壁垒（待AI生成）', source: null },
+      { title: '风险因素', content: null, hint: '主要经营风险、行业风险、政策风险（待AI生成）', source: null },
+    ];
+  };
+
+  const companySections = buildCompanySections();
+
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <div className="text-xs text-gray-400 flex items-center gap-1">
+          <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+          stock_holders + stock_company_info（Tushare Pro）
+        </div>
+        <div className="text-sm text-gray-400 py-4 text-center">加载中...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
       <div className="text-xs text-gray-400 flex items-center gap-1">
-        <span className="bg-amber-50 border border-amber-200 text-amber-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
-        stock_holders（Mock）+ 非结构化字段（待完善）
+        <span className="bg-green-50 border border-green-200 text-green-600 px-1.5 py-0.5 rounded font-medium">数据来源</span>
+        stock_holders + stock_company_info（Tushare Pro）
       </div>
 
       {/* 股东结构 */}
       <div>
         <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
           <span>前十大股东</span>
-          <span className="text-gray-400 font-normal">（截至 2025-12-31）</span>
+          <span className="text-gray-400 font-normal">（截至 {endDate || '—'}）</span>
         </div>
-        <div className="space-y-1.5">
-          {holders.map((h, i) => (
-            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-              <span className="text-[10px] text-gray-400 font-mono w-4 flex-shrink-0">{i + 1}</span>
-              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border flex-shrink-0 ${typeColor[h.holder_type]}`}>
-                {typeLabel[h.holder_type]}
-              </span>
-              <span className="text-xs text-gray-800 flex-1 truncate">{h.holder_name}</span>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="w-20 bg-gray-200 rounded-full h-1.5">
-                  <div
-                    className="h-1.5 rounded-full bg-blue-400"
-                    style={{ width: `${Math.min(h.hold_ratio / holders[0].hold_ratio * 100, 100)}%` }}
-                  />
+        {holders.length === 0 ? (
+          <div className="text-sm text-gray-400 py-2">暂无股东数据</div>
+        ) : (
+          <>
+            <div className="space-y-1.5">
+              {holders.map((h, i) => (
+                <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                  <span className="text-[10px] text-gray-400 font-mono w-4 flex-shrink-0">{i + 1}</span>
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border flex-shrink-0 ${typeColor[h.holder_type]}`}>
+                    {typeLabel[h.holder_type]}
+                  </span>
+                  <span className="text-xs text-gray-800 flex-1 truncate">{h.holder_name}</span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="w-20 bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className="h-1.5 rounded-full bg-blue-400"
+                        style={{ width: `${Math.min(h.hold_ratio / holders[0].hold_ratio * 100, 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-bold tabular-nums text-gray-700 w-12 text-right">{h.hold_ratio.toFixed(2)}%</span>
+                  </div>
                 </div>
-                <span className="text-xs font-bold tabular-nums text-gray-700 w-12 text-right">{h.hold_ratio.toFixed(2)}%</span>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
-        {/* 股东类型汇总 */}
-        <div className="mt-2 flex gap-3 text-[10px] text-gray-500">
-          {(['state', 'institution', 'hk', 'individual'] as const).map(t => {
-            const total = holders.filter(h => h.holder_type === t).reduce((s, h) => s + h.hold_ratio, 0);
-            return total > 0 ? (
-              <span key={t} className={`px-1.5 py-0.5 rounded border ${typeColor[t]}`}>
-                {typeLabel[t]} {total.toFixed(2)}%
-              </span>
-            ) : null;
-          })}
-        </div>
+            {/* 股东类型汇总 */}
+            <div className="mt-2 flex gap-3 text-[10px] text-gray-500">
+              {(['state', 'institution', 'hk', 'individual'] as const).map(t => {
+                const total = holders.filter(h => h.holder_type === t).reduce((s, h) => s + h.hold_ratio, 0);
+                return total > 0 ? (
+                  <span key={t} className={`px-1.5 py-0.5 rounded border ${typeColor[t]}`}>
+                    {typeLabel[t]} {total.toFixed(2)}%
+                  </span>
+                ) : null;
+              })}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* 非结构化占位内容 */}
+      {/* 公司画像内容 */}
       <div>
-        <div className="text-xs font-semibold text-gray-700 mb-2">公司画像（待完善）</div>
+        <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+          <span>公司画像</span>
+          {companyInfo && (
+            <span className="text-[10px] font-normal text-gray-400">数据来源：stock_company_info（Tushare Pro）</span>
+          )}
+        </div>
         <div className="space-y-2">
-          {placeholderSections.map(s => (
-            <div key={s.field} className="border border-dashed border-gray-200 rounded-lg p-3">
+          {companySections.map((s, idx) => (
+            <div key={idx} className={`border rounded-lg p-3 ${s.content ? 'border-gray-200 bg-white' : 'border-dashed border-gray-200 bg-gray-50/50'}`}>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-semibold text-gray-600">{s.title}</span>
-                <span className="text-[10px] font-mono text-gray-300">{s.field}</span>
+                {s.source && (
+                  <span className="text-[10px] font-mono text-green-600 bg-green-50 px-1.5 py-0.5 rounded">{s.source}</span>
+                )}
               </div>
-              <div className="text-xs text-gray-400 italic">{s.hint}</div>
-              <div className="mt-2 text-[10px] text-gray-300 bg-gray-50 rounded px-2 py-1">
-                待填充 · 后续可通过管理界面录入或 AI 辅助生成
-              </div>
+              {s.content ? (
+                <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{s.content}</div>
+              ) : (
+                <>
+                  <div className="text-xs text-gray-400 italic">{s.hint}</div>
+                  <div className="mt-2 text-[10px] text-gray-400 bg-gray-100 rounded px-2 py-1">
+                    待填充 · 后续可通过管理界面录入或 AI 辅助生成
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -2005,10 +2449,153 @@ function CompanyCanvasPanel({ stock }: { stock: StockMeta }) {
 }
 
 // ─── 个股详情面板 ─────────────────────────────────────────────────────────────
+interface StockProfile {
+  ts_code: string;
+  name_cn: string;
+  close_today: number;
+  pct_chg_today: number;
+  pe_ttm: number;
+  pb: number;
+  ps_ttm: number;
+  dv_ratio: number;
+  turnover_rate: number;
+  volume_ratio: number;
+  total_mv: number;
+  circ_mv: number;
+  high_52w: number;
+  low_52w: number;
+  net_amount: number;
+  buy_elg_amount: number;
+  buy_lg_amount: number;
+  buy_md_amount: number;
+  buy_sm_amount: number;
+  sell_elg_amount: number;
+  sell_lg_amount: number;
+  sell_md_amount: number;
+  sell_sm_amount: number;
+}
+
 function StockDetailPanel({ stock, onClose }: { stock: StockMeta; onClose: () => void }) {
-  const profile = genStockProfile(stock);
-  const basePrice = getStockBasePrice(stock.ts_code);
+  const [profile, setProfile] = useState<StockProfile | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'kline' | 'flow' | 'funda' | 'fina' | 'trend' | 'canvas' | 'ann'>('kline');
+
+  useEffect(() => {
+    async function fetchStockData() {
+      setLoading(true);
+      
+      // 分别获取每个表的最新数据（因为日期可能不一致）
+      const [{ data: dailyData }, { data: basicData }, { data: moneyflowData }] = await Promise.all([
+        // 日线行情 - 获取最新一条
+        supabase.from('stock_daily')
+          .select('trade_date, close, pct_chg, high, low')
+          .eq('ts_code', stock.ts_code)
+          .order('trade_date', { ascending: false })
+          .limit(1)
+          .single(),
+        // 估值数据 - 获取最新一条
+        supabase.from('stock_daily_basic')
+          .select('trade_date, pe_ttm, pb, ps_ttm, dv_ratio, turnover_rate, volume_ratio, total_mv, circ_mv')
+          .eq('ts_code', stock.ts_code)
+          .order('trade_date', { ascending: false })
+          .limit(1)
+          .single(),
+        // 资金流向 - 获取最新一条
+        supabase.from('stock_moneyflow')
+          .select('trade_date, net_amount, buy_elg_amount, buy_lg_amount, buy_md_amount, buy_sm_amount, sell_elg_amount, sell_lg_amount, sell_md_amount, sell_sm_amount')
+          .eq('ts_code', stock.ts_code)
+          .order('trade_date', { ascending: false })
+          .limit(1)
+          .single(),
+      ]);
+      
+      // 获取52周高低点
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const { data: highLowData } = await supabase
+        .from('stock_daily')
+        .select('high, low')
+        .eq('ts_code', stock.ts_code)
+        .gte('trade_date', oneYearAgo.toISOString().split('T')[0]);
+      
+      let high52w = dailyData?.high ?? 0;
+      let low52w = dailyData?.low ?? 0;
+      
+      if (highLowData && highLowData.length > 0) {
+        high52w = Math.max(...highLowData.map(d => d.high));
+        low52w = Math.min(...highLowData.map(d => d.low));
+      }
+      
+      if (dailyData) {
+        setProfile({
+          ts_code: stock.ts_code,
+          name_cn: stock.name_cn,
+          close_today: dailyData.close ?? 0,
+          pct_chg_today: dailyData.pct_chg ?? 0,
+          pe_ttm: basicData?.pe_ttm ?? 0,
+          pb: basicData?.pb ?? 0,
+          ps_ttm: basicData?.ps_ttm ?? 0,
+          dv_ratio: basicData?.dv_ratio ?? 0,
+          turnover_rate: basicData?.turnover_rate ?? 0,
+          volume_ratio: basicData?.volume_ratio ?? 0,
+          total_mv: basicData?.total_mv ?? 0,
+          circ_mv: basicData?.circ_mv ?? 0,
+          high_52w: high52w,
+          low_52w: low52w,
+          net_amount: moneyflowData?.net_amount ?? 0,
+          buy_elg_amount: moneyflowData?.buy_elg_amount ?? 0,
+          buy_lg_amount: moneyflowData?.buy_lg_amount ?? 0,
+          buy_md_amount: moneyflowData?.buy_md_amount ?? 0,
+          buy_sm_amount: moneyflowData?.buy_sm_amount ?? 0,
+          sell_elg_amount: moneyflowData?.sell_elg_amount ?? 0,
+          sell_lg_amount: moneyflowData?.sell_lg_amount ?? 0,
+          sell_md_amount: moneyflowData?.sell_md_amount ?? 0,
+          sell_sm_amount: moneyflowData?.sell_sm_amount ?? 0,
+        });
+      }
+      
+      setLoading(false);
+    }
+    fetchStockData();
+  }, [stock.ts_code, stock.name_cn]);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-bold text-gray-900">{stock.name_cn}</h3>
+              <span className="text-sm text-gray-400 font-mono">{stock.symbol}</span>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+        <div className="text-sm text-gray-400 py-8 text-center">加载中...</div>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-bold text-gray-900">{stock.name_cn}</h3>
+              <span className="text-sm text-gray-400 font-mono">{stock.symbol}</span>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+        <div className="text-sm text-gray-400 py-8 text-center">暂无数据</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -2096,7 +2683,7 @@ function StockDetailPanel({ stock, onClose }: { stock: StockMeta; onClose: () =>
       </div>
 
       {/* 内容区 */}
-      {activeTab === 'kline' && <KlineChart tsCode={stock.ts_code} basePrice={basePrice} />}
+      {activeTab === 'kline' && <KlineChart tsCode={stock.ts_code} />}
       {activeTab === 'flow' && <MoneyFlowPanel profile={profile} />}
       {activeTab === 'funda' && <FundamentalsPanel profile={profile} />}
       {activeTab === 'fina' && <FinancialPanel tsCode={stock.ts_code} />}
