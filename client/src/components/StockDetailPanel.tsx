@@ -614,10 +614,10 @@ function FinaTrendPanel({ tsCode }: { tsCode: string }) {
   }, [filteredData]);
 
   const metricConfig = {
-    roe: { label: 'ROE(%)', color: '#3b82f6' },
-    grossprofit_margin: { label: '毛利率(%)', color: '#10b981' },
-    netprofit_margin: { label: '净利率(%)', color: '#f59e0b' },
-    debt_to_assets: { label: '资产负债率(%)', color: '#ef4444' },
+    roe: { label: 'ROE', color: '#3b82f6', unit: '%' },
+    grossprofit_margin: { label: '毛利率', color: '#10b981', unit: '%' },
+    netprofit_margin: { label: '净利率', color: '#f59e0b', unit: '%' },
+    debt_to_assets: { label: '负债率', color: '#ef4444', unit: '%' },
   };
 
   if (loading) return <div className="text-center py-8 text-gray-400">加载中...</div>;
@@ -683,6 +683,7 @@ function FinaTrendPanel({ tsCode }: { tsCode: string }) {
             <Area
               type="monotone"
               dataKey={metricConfig[chartMetric].label}
+              name={`${metricConfig[chartMetric].label}(${metricConfig[chartMetric].unit})`}
               stroke={metricConfig[chartMetric].color}
               fillOpacity={1}
               fill="url(#colorMetric)"

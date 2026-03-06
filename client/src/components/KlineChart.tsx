@@ -103,7 +103,10 @@ export function KlineChart({
           borderColor: '#334155',
           timeVisible: false,
           secondsVisible: false,
+          visible: true,
         },
+        handleScroll: false,        // 禁用滚动（拖动）
+        handleScale: true,          // 保留缩放
         width: containerRef.current.clientWidth,
         height: height,
       });

@@ -5,7 +5,7 @@
  * 支持：蜡烛图、成交量、移动平均线、十字光标
  */
 import { useEffect, useRef, useState } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData } from 'lightweight-charts';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData, Time } from 'lightweight-charts';
 
 interface ChartData {
   trade_date: string;
@@ -105,9 +105,7 @@ export default function TradingViewChart({ data, period }: TradingViewChartProps
 
     // 转换数据格式
     const candleData: CandlestickData[] = data.map(d => ({
-      time: period === 'intraday' 
-        ? new Date(d.trade_date).getTime() / 1000
-        : new Date(d.trade_date).getTime() / 1000,
+      time: new Date(d.trade_date).getTime() / 1000 as Time,
       open: d.open,
       high: d.high,
       low: d.low,
@@ -115,9 +113,7 @@ export default function TradingViewChart({ data, period }: TradingViewChartProps
     }));
 
     const volumeData: HistogramData[] = data.map(d => ({
-      time: period === 'intraday'
-        ? new Date(d.trade_date).getTime() / 1000
-        : new Date(d.trade_date).getTime() / 1000,
+      time: new Date(d.trade_date).getTime() / 1000 as Time,
       value: d.vol,
       color: d.close >= d.open ? upColor : downColor,
     }));

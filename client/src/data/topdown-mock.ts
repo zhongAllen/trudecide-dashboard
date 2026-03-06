@@ -335,7 +335,7 @@ export interface ScoreFactor {
   weight: number;       // 权重（0-1，所有因子之和=1）
   raw_score: number;    // 该因子的原始评分（0-100）
   contribution: number; // 得分贡献 = raw_score × weight（保留1位小数）
-  direction: '正向' | '负向'; // 对总分的影响方向
+  direction: '正向' | '负向' | '中性'; // 对总分的影响方向
   note?: string;        // 简短说明（可选）
 }
 
