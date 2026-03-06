@@ -296,7 +296,9 @@ function FinancialPanel({ tsCode }: { tsCode: string }) {
   useEffect(() => {
     async function fetchFina() {
       setLoading(true);
-      const { data } = await supabase
+      console.log('[FinancialPanel] Fetching fina_indicator for:', tsCode);
+      
+      const { data, error } = await supabase
         .from('fina_indicator')
         .select('end_date, roe, debt_to_assets, grossprofit_margin, netprofit_margin, netprofit_yoy, or_yoy')
         .eq('ts_code', tsCode)
@@ -304,6 +306,9 @@ function FinancialPanel({ tsCode }: { tsCode: string }) {
         .limit(1)
         .maybeSingle();
 
+      if (error) console.error('[FinancialPanel] Error:', error);
+      console.log('[FinancialPanel] Data:', data);
+      
       setFinaData(data);
       setLoading(false);
     }
@@ -446,14 +451,32 @@ function CompanyCanvasPanel({ stock }: { stock: StockMeta }) {
     async function fetchData() {
       setLoading(true);
 
+      // 先获取最新的报告期
+      const { data: latestHolder } = await supabase
+        .from('stock_holders')
+        .select('end_date')
+        .eq('ts_code', stock.ts_code)
+        .order('end_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const latestEndDate = latestHolder?.end_date;
+
       const [{ data: info }, { data: holderData }, { data: ai }] = await Promise.all([
         supabase.from('stock_company_info').select('*').eq('ts_code', stock.ts_code).maybeSingle(),
-        supabase.from('stock_holders').select('holder_name, hold_ratio, hold_amount').eq('ts_code', stock.ts_code).order('hold_ratio', { ascending: false }).limit(10),
+        latestEndDate 
+          ? supabase.from('stock_holders').select('holder_name, hold_ratio, hold_amount').eq('ts_code', stock.ts_code).eq('end_date', latestEndDate).order('hold_ratio', { ascending: false }).limit(10)
+          : Promise.resolve({ data: [] }),
         supabase.from('company_ai_analysis').select('*').eq('ts_code', stock.ts_code).maybeSingle(),
       ]);
 
       setCompanyInfo(info);
-      setHolders(holderData || []);
+      // 去重：根据 holder_name 去重
+      const uniqueHolders = holderData ? 
+        holderData.filter((item, index, self) => 
+          index === self.findIndex((t) => t.holder_name === item.holder_name)
+        ) : [];
+      setHolders(uniqueHolders);
       setAiData(ai);
       setLoading(false);
     }
