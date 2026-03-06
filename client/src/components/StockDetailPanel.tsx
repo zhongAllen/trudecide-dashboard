@@ -197,8 +197,11 @@ function aggregateWeeklyData(dailyData: StockDaily[]): StockDaily[] {
 
   dailyData.forEach((day) => {
     const date = new Date(day.trade_date);
+    // 计算本周一的日期
+    const dayOfWeek = date.getDay(); // 0=周日, 1=周一, ..., 6=周六
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     const weekStart = new Date(date);
-    weekStart.setDate(date.getDate() - date.getDay() + 1); // 周一为周开始
+    weekStart.setDate(date.getDate() - daysFromMonday);
     const weekKey = weekStart.toISOString().split('T')[0];
 
     if (!weeklyMap.has(weekKey)) {
