@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "npm install && npm run build",
+  "buildCommand": "pnpm run build",
   "outputDirectory": "dist/public",
   "framework": "vite",
-  "installCommand": "npm install",
+  "installCommand": "pnpm install",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
