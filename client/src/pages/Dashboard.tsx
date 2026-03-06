@@ -3,7 +3,8 @@ import { Link } from 'wouter';
 import {
   TrendingUp, TrendingDown, Minus, Settings, RefreshCw,
   Newspaper, Globe, Map, BarChart3, Wallet, ChevronRight,
-  Edit3, Check, X, Plus, AlertTriangle, ExternalLink
+  Edit3, Check, X, Plus, AlertTriangle, ExternalLink,
+  Tag, Clock, History, GitCommit
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +20,135 @@ import {
   Marker,
   ZoomableGroup
 } from 'react-simple-maps';
+
+// ─────────────────────────────────────────────
+// 版本类型定义
+// ─────────────────────────────────────────────
+interface AppVersion {
+  id: number;
+  version: string;
+  released_at: string;
+  changes: string;
+  author: string;
+  is_major: boolean;
+}
+
+// ─────────────────────────────────────────────
+// 版本徽章组件
+// ─────────────────────────────────────────────
+function VersionBadge() {
+  const [versions, setVersions] = useState<AppVersion[]>([]);
+  const [currentVersion, setCurrentVersion] = useState<AppVersion | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchVersions() {
+      const { data } = await supabase
+        .from('app_versions')
+        .select('*')
+        .order('released_at', { ascending: false });
+      if (data && data.length > 0) {
+        setVersions(data);
+        setCurrentVersion(data[0]);
+      }
+      setLoading(false);
+    }
+    fetchVersions();
+  }, []);
+
+  // 格式化为北京时间
+  const formatBJTime = (utcTime: string) => {
+    const date = new Date(utcTime);
+    return date.toLocaleString('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (loading) {
+    return <div className="w-16 h-5 bg-gray-200 rounded animate-pulse" />;
+  }
+
+  if (!currentVersion) {
+    return null;
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setShowHistory(true)}
+        className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-medium transition-colors border border-blue-200"
+        title="点击查看版本历史"
+      >
+        <Tag size={12} />
+        <span>{currentVersion.version}</span>
+      </button>
+
+      {/* 版本历史弹窗 */}
+      {showHistory && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[70vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center gap-2">
+                <History size={18} className="text-blue-600" />
+                <h3 className="font-semibold text-gray-900">版本历史</h3>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowHistory(false)}>
+                <X size={16} />
+              </Button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              <div className="space-y-4">
+                {versions.map((v, idx) => (
+                  <div
+                    key={v.id}
+                    className={`relative pl-4 pb-4 ${idx !== versions.length - 1 ? 'border-l-2 border-gray-200' : ''}`}
+                  >
+                    {/* 时间线节点 */}
+                    <div className={`absolute left-0 top-0 w-3 h-3 rounded-full -translate-x-[7px] ${
+                      idx === 0 ? 'bg-blue-500 ring-4 ring-blue-100' : 'bg-gray-300'
+                    }`} />
+
+                    <div className="flex items-start justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-900">{v.version}</span>
+                        {idx === 0 && (
+                          <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">当前</Badge>
+                        )}
+                        {v.is_major && (
+                          <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">重要</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
+                      <Clock size={12} />
+                      <span>{formatBJTime(v.released_at)}</span>
+                      <span className="text-gray-300">·</span>
+                      <GitCommit size={12} />
+                      <span>{v.author}</span>
+                    </div>
+
+                    <p className="text-sm text-gray-700 leading-relaxed">{v.changes}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-4 border-t bg-gray-50">
+              <Button className="w-full" onClick={() => setShowHistory(false)}>
+                关闭
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 // ─────────────────────────────────────────────
 // 类型定义
@@ -516,7 +646,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           <BarChart3 className="text-blue-600" size={20} />
           <span className="font-semibold text-gray-900">Trudecide 驾驶舱</span>
-          <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">⚠ 部分测试数据</Badge>
+          <VersionBadge />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400">更新于 {lastUpdated}</span>
