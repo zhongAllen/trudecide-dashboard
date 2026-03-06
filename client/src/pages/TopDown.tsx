@@ -2711,40 +2711,52 @@ export default function TopDown() {
 
     if (stockCode) {
       // 从 stock_meta 查询股票信息，同时获取所属板块
-      supabase
-        .from('stock_meta')
-        .select('*')
-        .eq('ts_code', stockCode)
-        .single()
-        .then(async ({ data: stockData }) => {
-          if (stockData) {
-            setSelectedStock(stockData as StockMeta);
-            
-            // 查询该股票所属的第一个板块作为选中板块
-            const { data: sectorData } = await supabase
-              .from('sector_stock_map')
-              .select('sector_id')
-              .eq('ts_code', stockCode)
-              .eq('is_current', true)
-              .limit(1)
+      const loadStockFromUrl = async () => {
+        try {
+          // 1. 查询股票信息
+          const { data: stockData, error: stockError } = await supabase
+            .from('stock_meta')
+            .select('*')
+            .eq('ts_code', stockCode)
+            .single();
+          
+          if (stockError || !stockData) {
+            console.error('Stock not found:', stockCode);
+            setInitialLoadDone(true);
+            return;
+          }
+          
+          setSelectedStock(stockData as StockMeta);
+          
+          // 2. 查询该股票所属的第一个板块
+          const { data: sectorMappings } = await supabase
+            .from('sector_stock_map')
+            .select('sector_id')
+            .eq('ts_code', stockCode)
+            .eq('is_current', true)
+            .limit(1);
+          
+          if (sectorMappings && sectorMappings.length > 0) {
+            const { data: sectorMeta } = await supabase
+              .from('sector_meta')
+              .select('*')
+              .eq('id', sectorMappings[0].sector_id)
               .single();
             
-            if (sectorData) {
-              const { data: sectorMeta } = await supabase
-                .from('sector_meta')
-                .select('*')
-                .eq('id', sectorData.sector_id)
-                .single();
-              
-              if (sectorMeta) {
-                setSelectedSector(sectorMeta as RealSectorMeta);
-              }
+            if (sectorMeta) {
+              setSelectedSector(sectorMeta as RealSectorMeta);
             }
-            
-            setActiveLayer(3);
           }
+          
+          setActiveLayer(3);
+        } catch (err) {
+          console.error('Error loading stock from URL:', err);
+        } finally {
           setInitialLoadDone(true);
-        });
+        }
+      };
+      
+      loadStockFromUrl();
     } else {
       setInitialLoadDone(true);
     }
