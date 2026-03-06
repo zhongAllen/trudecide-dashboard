@@ -301,18 +301,39 @@ function ProfessionalKlineChart({ data, period }: { data: StockDaily[]; period: 
 function MoneyFlowPanel({ tsCode }: { tsCode: string }) {
   const [data, setData] = useState<MoneyFlow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [source, setSource] = useState<'dc' | 'ths'>('dc');
 
   useEffect(() => {
     async function fetchData() {
-      const { data: flowData } = await supabase
+      // 先尝试获取 DC 数据（东方财富）
+      const { data: dcData } = await supabase
         .from('stock_moneyflow')
         .select('*')
         .eq('ts_code', tsCode)
+        .eq('source', 'dc')
         .order('trade_date', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       
-      setData(flowData);
+      if (dcData) {
+        setData(dcData);
+        setSource('dc');
+      } else {
+        // 如果没有 DC 数据，尝试获取 THS 数据（同花顺）
+        const { data: thsData } = await supabase
+          .from('stock_moneyflow')
+          .select('*')
+          .eq('ts_code', tsCode)
+          .eq('source', 'ths')
+          .order('trade_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (thsData) {
+          setData(thsData);
+          setSource('ths');
+        }
+      }
       setLoading(false);
     }
     fetchData();
@@ -330,7 +351,10 @@ function MoneyFlowPanel({ tsCode }: { tsCode: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <span className="text-gray-500">主力净流入</span>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">主力净流入</span>
+          <span className="text-xs text-gray-400">({source === 'dc' ? '东方财富' : '同花顺'})</span>
+        </div>
         <span className={`text-xl font-bold ${netInflow > 0 ? 'text-red-500' : 'text-green-500'}`}>
           {netInflow > 0 ? '+' : ''}{fmtMoney(netInflow)}
         </span>
