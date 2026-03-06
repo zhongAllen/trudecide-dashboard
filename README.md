@@ -108,3 +108,4 @@ pnpm start
 
 当你将此项目分享给其他开发者或 AI 产品时，他们需要遵循「快速开始」章节的指引，创建自己的 `.env` 文件并填入凭证，从而安全地在本地运行项目。
 # Deployment trigger: Thu Mar  5 20:22:02 CST 2026
+# Auto Deploy Test
