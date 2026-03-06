@@ -134,7 +134,7 @@ def collect_one_stock(ts_code: str, pro, start_date: str, end_date: str, dry_run
         
         # 获取周线数据
         df = retry_call(
-            pro.stk_weekly,
+            pro.weekly,
             ts_code=ts_code,
             start_date=start_date,
             end_date=end_date,
