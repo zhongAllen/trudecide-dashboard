@@ -11,7 +11,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Link } from 'wouter';
+import { Link, useSearch } from 'wouter';
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, ChevronRight,
   BarChart2, Activity, Globe, Layers, Star, 
@@ -2699,6 +2699,34 @@ export default function TopDown() {
   const [activeLayer, setActiveLayer] = useState<1 | 2 | 3>(1);
   const [selectedSector, setSelectedSector] = useState<RealSectorMeta | null>(null);
   const [selectedStock, setSelectedStock] = useState<StockMeta | null>(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+
+  // 处理 URL 参数：如果带有 ?stock=xxx，自动打开该股票详情
+  const search = useSearch();
+  useEffect(() => {
+    if (initialLoadDone) return;
+
+    const params = new URLSearchParams(search);
+    const stockCode = params.get('stock');
+
+    if (stockCode) {
+      // 从 stock_meta 查询股票信息
+      supabase
+        .from('stock_meta')
+        .select('*')
+        .eq('ts_code', stockCode)
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            setSelectedStock(data as StockMeta);
+            setActiveLayer(3);
+          }
+          setInitialLoadDone(true);
+        });
+    } else {
+      setInitialLoadDone(true);
+    }
+  }, [search, initialLoadDone]);
 
   const handleSelectSector = useCallback((s: RealSectorMeta) => {
     setSelectedSector(s);

@@ -788,13 +788,17 @@ export default function Dashboard() {
                       {holdingSummary.map(h => (
                         <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="px-4 py-2.5">
-                            <div className="font-medium text-gray-900">{h.name_cn || h.ts_code}</div>
-                            <div className="text-gray-400">{h.ts_code}</div>
-                            {h.strategy_note && (
-                              <div className="text-gray-400 truncate max-w-[120px]" title={h.strategy_note}>
-                                {h.strategy_note}
+                            <Link href={`/topdown?stock=${h.ts_code}`}>
+                              <div className="cursor-pointer group">
+                                <div className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">{h.name_cn || h.ts_code}</div>
+                                <div className="text-gray-400 group-hover:text-blue-400 transition-colors">{h.ts_code}</div>
+                                {h.strategy_note && (
+                                  <div className="text-gray-400 truncate max-w-[120px]" title={h.strategy_note}>
+                                    {h.strategy_note}
+                                  </div>
+                                )}
                               </div>
-                            )}
+                            </Link>
                           </td>
                           <td className="px-2 py-2.5 text-right">
                             <div className="font-medium">{fmtPrice(h.currentPrice)}</div>
