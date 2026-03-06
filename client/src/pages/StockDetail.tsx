@@ -19,12 +19,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
-  ResponsiveContainer, Cell, ReferenceLine, Area
-} from 'recharts';
 import { supabase } from '@/lib/supabase';
-import TradingViewChart from '@/components/TradingViewChart';
+import { KlineChart, convertToKlineData, type KlineData } from '@/components/KlineChart';
 
 // ─── 类型定义 ─────────────────────────────────────────────────────────────────
 interface StockMeta {
@@ -214,34 +210,39 @@ function pctBg(v: number) {
   return 'bg-gray-50';
 }
 
-// ─── 专业K线图组件 ────────────────────────────────────────────────────────────
+// ─── 专业K线图组件（使用 klinecharts）─────────────────────────────────────────
 function ProfessionalKlineChart({ data, period }: { data: StockDaily[]; period: 'day' | 'week' | 'month' }) {
-  const [hoverData, setHoverData] = useState<ChartData | null>(null);
+  const [hoverData, setHoverData] = useState<KlineData | null>(null);
   
-  const chartData = useMemo<ChartData[]>(() => {
-    return data.map(d => ({
-      ...d,
-      date: d.trade_date.slice(5), // MM-DD
-      fullDate: d.trade_date,
-      isUp: d.close >= d.open,
-      amplitude: ((d.high - d.low) / d.low * 100).toFixed(2),
-    })).reverse();
+  // 转换数据为 klinecharts 格式
+  const klineData = useMemo(() => {
+    return convertToKlineData(data);
   }, [data]);
 
-  const latest = hoverData || chartData[chartData.length - 1];
+  // 获取最新数据（用于显示价格信息）
+  const latest = hoverData || (klineData.length > 0 ? klineData[klineData.length - 1] : null);
+  
+  // 计算昨收
+  const preClose = latest ? latest.close / (1 + (data[data.length - 1]?.pct_chg || 0) / 100) : 0;
+  
+  // 计算涨跌幅
+  const pctChg = latest && preClose ? ((latest.close - preClose) / preClose * 100) : 0;
+  
+  // 计算振幅
+  const amplitude = latest && latest.low ? ((latest.high - latest.low) / latest.low * 100).toFixed(2) : '0.00';
 
   return (
     <div className="space-y-3">
       {/* 价格信息栏 */}
       <div className="flex items-baseline gap-4">
-        <span className={`text-3xl font-bold ${pctColor(latest?.pct_chg)}`}>
+        <span className={`text-3xl font-bold ${pctColor(pctChg)}`}>
           {fmtPrice(latest?.close)}
         </span>
-        <span className={`text-lg ${pctColor(latest?.pct_chg)}`}>
-          {latest?.pct_chg > 0 ? '+' : ''}{fmtPrice(latest?.pct_chg)}
+        <span className={`text-lg ${pctColor(pctChg)}`}>
+          {pctChg > 0 ? '+' : ''}{fmtPrice(latest?.close - preClose)}
         </span>
-        <span className={`text-lg ${pctColor(latest?.pct_chg)}`}>
-          {fmtPct(latest?.pct_chg)}
+        <span className={`text-lg ${pctColor(pctChg)}`}>
+          {fmtPct(pctChg)}
         </span>
       </div>
 
@@ -263,84 +264,30 @@ function ProfessionalKlineChart({ data, period }: { data: StockDaily[]; period: 
         </div>
         <div>
           <span className="text-gray-500">昨收</span>
-          <div className="font-medium">{fmtPrice(latest?.close ? latest.close / (1 + (latest.pct_chg || 0) / 100) : 0)}</div>
+          <div className="font-medium">{fmtPrice(preClose)}</div>
         </div>
         <div>
           <span className="text-gray-500">成交量</span>
-          <div className="font-medium">{fmtVolume(latest?.vol)}</div>
+          <div className="font-medium">{fmtVolume(latest?.volume)}</div>
         </div>
         <div>
           <span className="text-gray-500">成交额</span>
-          <div className="font-medium">{fmtMoney(latest?.amount)}</div>
+          <div className="font-medium">{fmtMoney((latest?.volume || 0) * (latest?.close || 0) / 100)}</div>
         </div>
         <div>
           <span className="text-gray-500">振幅</span>
-          <div className="font-medium">{latest?.amplitude}%</div>
+          <div className="font-medium">{amplitude}%</div>
         </div>
       </div>
 
       {/* K线图 */}
       <div className="h-[400px] mt-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={chartData}
-            onMouseMove={(e: any) => {
-              if (e.activePayload) {
-                setHoverData(e.activePayload[0].payload);
-              }
-            }}
-            onMouseLeave={() => setHoverData(null)}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis 
-              dataKey="date" 
-              tick={{ fontSize: 10 }}
-              interval="preserveStartEnd"
-            />
-            <YAxis 
-              domain={['auto', 'auto']}
-              tick={{ fontSize: 10 }}
-              tickFormatter={(v) => v.toFixed(2)}
-            />
-            <ReTooltip
-              content={({ active, payload }) => {
-                if (active && payload && payload.length) {
-                  const d = payload[0].payload;
-                  return (
-                    <div className="bg-white border rounded-lg p-2 shadow-lg text-xs">
-                      <div className="font-medium mb-1">{d.fullDate}</div>
-                      <div>开: {fmtPrice(d.open)}</div>
-                      <div>高: {fmtPrice(d.high)}</div>
-                      <div>低: {fmtPrice(d.low)}</div>
-                      <div>收: {fmtPrice(d.close)}</div>
-                      <div className={pctColor(d.pct_chg)}>涨跌: {fmtPct(d.pct_chg)}</div>
-                    </div>
-                  );
-                }
-                return null;
-              }}
-            />
-            {/* 蜡烛图效果 - 使用柱状图模拟 */}
-            <Bar 
-              dataKey="low" 
-              fill="transparent" 
-              stroke="transparent"
-            />
-            <Bar 
-              dataKey="high" 
-              fill="transparent"
-            />
-            {/* 简化版：使用线图展示 */}
-            <Line
-              type="monotone"
-              dataKey="close"
-              stroke="#2563eb"
-              strokeWidth={1.5}
-              dot={false}
-              activeDot={{ r: 4 }}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
+        <KlineChart
+          data={klineData}
+          height={400}
+          onDataHover={setHoverData}
+          maPeriods={[5, 10, 20, 60]}
+        />
       </div>
     </div>
   );
